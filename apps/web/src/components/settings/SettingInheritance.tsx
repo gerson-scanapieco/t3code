@@ -100,6 +100,12 @@ function formatValue(
       const label = BACKGROUND_ACTIVITY_PROFILE_LABELS[value.profile];
       return label ? resolve(label) : value.profile;
     }
+    if (key === "worktreeLocation" && "directory" in value && typeof value.directory === "string") {
+      const folder = value.directory === "" ? resolve(msg("T3 worktree folder")) : value.directory;
+      return "naming" in value && value.naming === "branch"
+        ? resolve(msg("{folder}, named by branch", { folder }))
+        : folder;
+    }
     if ("model" in value && typeof value.model === "string") return value.model;
     if ("mode" in value && typeof value.mode === "string") {
       if (key === "worktreeCleanup") {

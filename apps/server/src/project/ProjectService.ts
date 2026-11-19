@@ -37,7 +37,7 @@ import { deletedProjectOverridePatch } from "../provider/ProjectSettingsOverride
 import { makeIsManagedWorktreePath } from "../worktreesDirectory.ts";
 import * as ProcessRunner from "../processRunner.ts";
 import * as ProjectEnrichmentService from "./ProjectEnrichmentService.ts";
-import { makeIsWorktreeContainer } from "./worktreeContainer.ts";
+import { makeReadWorktreeContainer } from "./worktreeContainer.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 
 export interface ProjectCreateInput extends ProjectCreatePayload {
@@ -185,7 +185,7 @@ export const make = Effect.gen(function* () {
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const fileSystem = yield* FileSystem.FileSystem;
   const isManagedWorktreePath = yield* makeIsManagedWorktreePath;
-  const isWorktreeContainer = yield* makeIsWorktreeContainer.pipe(
+  const readWorktreeContainer = yield* makeReadWorktreeContainer.pipe(
     Effect.provide(ProcessRunner.layer),
   );
   const projectLocks = yield* KeyedLock.make<ProjectId>();
@@ -254,10 +254,14 @@ export const make = Effect.gen(function* () {
     projectId: ProjectId,
     workspaceRoot: string,
   ) {
-    if (!(yield* isWorktreeContainer(workspaceRoot))) return;
+    const container = yield* readWorktreeContainer(workspaceRoot);
+    if (container === null) return;
     return yield* new ProjectInvalidError({
       projectId,
-      detail: `${workspaceRoot} holds a repository's worktrees but is not a checkout itself. Add one of its worktrees as the project instead.`,
+      detail:
+        container.defaultCheckout === null
+          ? `${workspaceRoot} holds a repository's worktrees but is not a checkout itself. Add one of its worktrees as the project instead.`
+          : `${workspaceRoot} holds a repository's worktrees but is not a checkout itself. Add ${container.defaultCheckout} as the project instead; its threads can still use the other worktrees.`,
     });
   });
 

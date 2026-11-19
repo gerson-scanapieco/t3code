@@ -10,7 +10,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
-import type * as Path from "effect/Path";
+import * as Path from "effect/Path";
 import type * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import { SCAN_CACHE_FILE_NAME } from "./usage/usageScanCache.ts";
@@ -28,6 +28,7 @@ import {
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as ServerConfig from "./config.ts";
 import * as StorageCleanup from "./storageCleanup.ts";
+import { createdWorktreeRecordPath } from "./worktreesDirectory.ts";
 import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
 import * as GitManager from "./git/GitManager.ts";
 import * as GitWorkflowService from "./git/GitWorkflowService.ts";
@@ -2347,6 +2348,63 @@ describe("orphan worktree reports", () => {
           expect(yield* fs.exists(fixture.worktree)).toBe(false);
         }),
       ),
+  );
+
+  it.live("in a bare repository's folder, removes only the worktrees T3 created for threads", () =>
+    runCleanupTest(
+      Effect.gen(function* () {
+        const fixture = yield* cleanupFixture();
+        const container = `${yield* fixture.fs.realPath(
+          yield* fixture.fs.makeTempDirectoryScoped({ prefix: "cleanup-container-" }),
+        )}/sazzi`;
+        yield* fixture.command(fixture.repo, [
+          "clone",
+          "--bare",
+          fixture.repo,
+          `${container}/.bare`,
+        ]);
+        yield* fixture.fs.writeFileString(`${container}/.git`, "gitdir: ./.bare\n");
+        const checkout = `${container}/main`;
+        const handMade = `${container}/hand-made`;
+        const created = `${container}/created`;
+        yield* fixture.command(container, ["worktree", "add", checkout, "main"]);
+        yield* fixture.command(container, ["worktree", "add", "-b", "hand-made", handMade, "main"]);
+        yield* fixture.command(container, ["worktree", "add", "-b", "created", created, "main"]);
+        const path = yield* Path.Path;
+        const record = createdWorktreeRecordPath(fixture.config.stateDir, created, path);
+        yield* fixture.fs.makeDirectory(path.dirname(record), { recursive: true });
+        yield* fixture.fs.writeFileString(record, `${created}\n`);
+        fixture.setProjectRoots([checkout]);
+        const thread = (id: string, branch: string, worktreePath: string) =>
+          shell({
+            id: ThreadId.make(id),
+            lineage: {
+              rootThreadId: ThreadId.make(id),
+              parentThreadId: null,
+              relationshipToParent: null,
+            },
+            branch,
+            worktreePath,
+          });
+        fixture.setThreads([
+          thread("on-checkout", "main", checkout),
+          thread("on-hand-made", "hand-made", handMade),
+          thread("on-created", "created", created),
+        ]);
+
+        const { entries } = yield* fixture.service.runNow;
+
+        const outcome = (worktreePath: string) =>
+          entries.find((entry) => entry.path === worktreePath)?.outcome;
+        expect(outcome(checkout)).toBe("kept");
+        expect(outcome(handMade)).toBe("kept");
+        expect(outcome(created)).toBe("removed");
+        expect(yield* fixture.fs.exists(checkout)).toBe(true);
+        expect(yield* fixture.fs.exists(handMade)).toBe(true);
+        expect(yield* fixture.fs.exists(created)).toBe(false);
+        expect(yield* fixture.fs.exists(`${container}/.bare`)).toBe(true);
+      }),
+    ),
   );
 
   it.live("skips symbolic links at both directory levels and disabled cleanup", () =>

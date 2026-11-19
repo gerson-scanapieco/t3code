@@ -1,7 +1,7 @@
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 
-import { ThreadEnvMode, WorktreeSubmodules } from "./environment.ts";
+import { ThreadEnvMode, WorktreeLocation, WorktreeSubmodules } from "./environment.ts";
 import { ProjectScriptIcon } from "./project.ts";
 import type { ProjectScopedServerSettingKey, ServerSettings } from "./settings.ts";
 
@@ -108,6 +108,12 @@ export const T3ProjectFile = Schema.Struct({
         'How new worktrees populate git submodules: "recursive" (the default) initializes nested submodules too, "top-level" initializes only those declared by this repository, and "none" leaves every submodule empty for a setup script to handle. A project or environment setting in T3 Code overrides this.',
     }),
   ),
+  worktreeLocation: Schema.optionalKey(
+    WorktreeLocation.annotate({
+      description:
+        'Where new worktrees for this repository go. "directory" is the folder that holds them; a relative path resolves against the folder containing the repository\'s Git directory, which is the checkout itself for an ordinary clone and the container folder for a bare repository kept as <container>/.bare, so "." places worktrees beside the others there. An empty "directory" uses T3 Code\'s worktree folder. "naming" is "branch" for a folder named after the branch ("/" becomes "-") or "hashed" (the default) for the branch name shortened plus a unique ID. Existing folders are never reused; a "-2" style suffix is added instead. A project or environment setting in T3 Code overrides this.',
+    }),
+  ),
   worktreeSparsePatternsPath: Schema.optionalKey(
     trimmedNonEmpty(
       {
@@ -135,6 +141,7 @@ export type T3ProjectFile = typeof T3ProjectFile.Type;
 export const PROJECT_FILE_BACKED_SETTINGS = {
   defaultThreadEnvMode: { field: "defaultThreadEnvMode", builtIn: "local" },
   worktreeSubmodules: { field: "worktreeSubmodules", builtIn: "recursive" },
+  worktreeLocation: { field: "worktreeLocation", builtIn: { directory: "", naming: "hashed" } },
 } as const satisfies {
   // providerInstances overrides individual fields, so it cannot use whole-setting file inheritance.
   readonly [K in ProjectScopedServerSettingKey & keyof ServerSettings]?: {

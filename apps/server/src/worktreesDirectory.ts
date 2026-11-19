@@ -1,3 +1,6 @@
+// @effect-diagnostics-next-line nodeBuiltinImport:off -- Pure helpers hash a path into a file name synchronously.
+import * as NodeCrypto from "node:crypto";
+
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -27,6 +30,56 @@ export function isFilesystemRoot(directory: string, path: Path.Path): boolean {
   return path.dirname(directory) === directory;
 }
 
+/**
+ * A project's own worktree folder. Relative paths resolve against `repositoryBase`, the folder that
+ * holds the repository's Git directory. Null for filesystem roots and other platforms' absolute paths.
+ */
+export function resolveProjectWorktreesDirectory(
+  directory: string,
+  repositoryBase: string,
+  path: Path.Path,
+  home: string,
+): string | null {
+  const expanded = expandHomePath(directory, home);
+  if (!path.isAbsolute(expanded) && /^(?:[A-Za-z]:[\\/]|[\\/]{2})/.test(expanded)) return null;
+  const resolved = path.resolve(repositoryBase, expanded);
+  return isFilesystemRoot(resolved, path) ? null : resolved;
+}
+
+const MAX_BRANCH_FOLDER_BYTES = 100;
+
+export function branchFolderName(branch: string): string {
+  let name = "";
+  for (const character of branch.replace(/[\\/:*?"<>|]/g, "-")) {
+    if (Buffer.byteLength(name + character) > MAX_BRANCH_FOLDER_BYTES) break;
+    name += character;
+  }
+  return name;
+}
+
+/**
+ * T3 records each worktree it places for a thread, keyed by the path it returned. Folders it shares
+ * with the user's own checkouts, like a bare repository's container, are only touched with a record.
+ */
+export function createdWorktreeRecordPath(
+  stateDir: string,
+  worktreePath: string,
+  path: Pick<Path.Path, "join" | "resolve">,
+): string {
+  const key = NodeCrypto.createHash("sha256").update(path.resolve(worktreePath)).digest("hex");
+  return path.join(stateDir, "created-worktrees", key);
+}
+
+export const makeIsCreatedWorktree = Effect.gen(function* () {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const { stateDir } = yield* ServerConfig.ServerConfig;
+  return (worktreePath: string) =>
+    fileSystem
+      .exists(createdWorktreeRecordPath(stateDir, worktreePath, path))
+      .pipe(Effect.orElseSucceed(() => false));
+});
+
 export function managedWorktreesDirectories(
   settings: {
     readonly worktreesDirectory: string;
@@ -44,12 +97,13 @@ export function managedWorktreesDirectories(
   return [...directories];
 }
 
-// Client paths/branches are untrusted; recreate only real paths matching managed-folder/repo/branch.
+// Client paths/branches are untrusted; recreate only recorded paths or real paths matching managed-folder/repo/branch.
 export const makeIsManagedWorktreePath = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const serverConfig = yield* ServerConfig.ServerConfig;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
+  const isCreatedWorktree = yield* makeIsCreatedWorktree;
 
   // Match Git's symlink-following location: nearest real ancestor plus missing path components.
   const realLocation = (target: string): Effect.Effect<string> =>
@@ -67,6 +121,7 @@ export const makeIsManagedWorktreePath = Effect.gen(function* () {
     if (!path.isAbsolute(worktreePath)) return false;
     // Require normalized paths; Git and realPath disagree on .. after symlink traversal.
     if (path.resolve(worktreePath) !== worktreePath) return false;
+    if (yield* isCreatedWorktree(worktreePath)) return true;
     const settings = yield* serverSettings.getSettings.pipe(
       Effect.orElseSucceed(() => ({
         worktreesDirectory: "",

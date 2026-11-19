@@ -820,7 +820,7 @@ it.effect("refuses a worktree container as a new project and as a new workspace 
           })
           .pipe(Effect.flip);
         assert.equal(rejected._tag, "ProjectInvalidError", `core.bare=${coreBare}`);
-        assert.include(rejected.message, "Add one of its worktrees");
+        assert.match(rejected.message, /Add \S*develop as the project instead/);
         assert.isTrue(Option.isNone(yield* service.getByWorkspaceRoot(container)));
       }
 

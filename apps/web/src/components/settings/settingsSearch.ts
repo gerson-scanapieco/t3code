@@ -278,6 +278,15 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [msg("worktree location folder directory path drive external disk")],
   },
   {
+    id: "project-worktree-location",
+    title: msg("Worktree location"),
+    to: "/settings/worktrees",
+    scope: "project",
+    searchTerms: [
+      msg("worktree location folder directory path bare repository container branch name t3.json"),
+    ],
+  },
+  {
     id: "storage-artifacts",
     title: msg("Artifacts and logs"),
     to: "/settings/maintenance",

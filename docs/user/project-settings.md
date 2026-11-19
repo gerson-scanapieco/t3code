@@ -220,6 +220,22 @@ such as another drive, set **Settings → Worktrees → Worktree location** to a
 `D:\worktrees` or `~/worktrees`. The setting is per machine. Existing worktrees stay where they
 are, and cleanup covers both the default folder and the custom one.
 
+A project can choose its own folder instead: select the project in **Settings → Worktrees** and set
+**Worktree location**, or check it into `t3.json`:
+
+```json
+{ "worktreeLocation": { "directory": "../my-app-worktrees", "naming": "branch" } }
+```
+
+A relative `directory` starts from the folder that holds the repository's Git data. For an
+ordinary clone that is the checkout itself. For a bare repository kept as `my-app/.bare` with its
+worktrees beside it, such as `my-app/main`, it is `my-app`, so `"."` puts new worktrees next to the
+others. Add one of those worktrees, such as `my-app/main`, as the project; its threads can use the
+other worktrees too. `"naming": "branch"` names each folder after its branch (`feature/login`
+becomes `feature-login`); the default, `"hashed"`, adds a short unique ID. A folder that already
+exists is never reused: the new worktree gets a `-2` style suffix. Cleanup removes worktrees in a
+project's folder only when T3 Code created them for a thread, never your own checkouts there.
+
 ## Fast worktree checkout on macOS
 
 Fast worktree checkout is a beta. Turn it on for each Mac in **Settings → Labs → Fast worktree
