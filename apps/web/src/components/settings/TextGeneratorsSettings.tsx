@@ -255,6 +255,7 @@ const TASKS = [
     key: "sourceControlWriterModelSelection",
     label: msg("Commit messages, pull requests, and branch names"),
   },
+  { key: "threadSummaryModelSelection", label: msg("Thread summaries") },
   { key: "speechPostProcessingModelSelection", label: msg("Voice transcript cleanup") },
 ] as const;
 
@@ -548,7 +549,7 @@ function TextGenerationTaskPicker({
   const settings = useEnvironmentSettings(environmentId);
   const updateSettings = useUpdateEnvironmentSettings(environmentId);
   const own = settings[settingKey];
-  // Source control and voice follow the text generation model until they get their own.
+  // The other tasks follow the text generation model until they get their own.
   const selection = own ?? settings.textGenerationModelSelection;
   const targets = useTextGenerationTargets({
     environmentId,

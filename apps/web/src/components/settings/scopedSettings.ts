@@ -350,6 +350,7 @@ export function planScopedSettingsPatch(
                   (key === "defaultModelSelection" ||
                     key === "sourceControlWriterModelSelection" ||
                     key === "reviewGuideModelSelection" ||
+                    key === "threadSummaryModelSelection" ||
                     key === "textGenerationModelSelection") &&
                   (value.instanceId !== undefined || value.model !== undefined)
                 ) {

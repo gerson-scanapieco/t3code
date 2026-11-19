@@ -67,6 +67,7 @@ import {
   ChevronRightIcon,
   CornerLeftUpIcon,
   FileSearchIcon,
+  FileTextIcon,
   FolderGit2Icon,
   FolderIcon,
   FolderPlusIcon,
@@ -265,6 +266,7 @@ import { ProjectFilePicker } from "./files/ProjectFilePicker";
 import { openLinkPullRequestDialog } from "./pullRequest/LinkPullRequestDialog";
 import { canShareWithGuestAtom } from "./chat/guestShareAvailability";
 import { openGuestShareDialog } from "./chat/guestShareDialogState";
+import { openThreadSummaryDialog } from "./threadSummaryDialogState";
 import { openUseInAnotherApp } from "./mcp/UseInAnotherAppDialog";
 import { ProjectContentSearchDialog } from "./search/ProjectContentSearchDialog";
 import { settingsForThisPlatform, SETTINGS_SECTION_LABELS } from "./settings/settingsSearch";
@@ -1530,6 +1532,20 @@ function OpenCommandPaletteDialog(props: {
       icon: <UserPlusIcon className={ITEM_ICON_CLASS} />,
       run: async () => {
         openGuestShareDialog(threadRef);
+      },
+    });
+  }
+
+  if (activeThread !== null) {
+    const threadRef = scopeThreadRef(activeThread.environmentId, activeThread.id);
+    actionItems.push({
+      kind: "action",
+      value: "action:thread-summary",
+      searchTerms: ["summarize", "summary", "recap", "overview", "tldr", "thread"],
+      title: gt("Summarize thread"),
+      icon: <FileTextIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        openThreadSummaryDialog(threadRef);
       },
     });
   }

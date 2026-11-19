@@ -126,6 +126,14 @@ To change how titles are written, add **Thread title instructions** in **Setting
 Text generation**, under Advanced, such as a length limit or an identifier to put first. They apply to new and
 regenerated titles. Select a project to give it its own instructions.
 
+To catch up on a thread, choose **Thread summary** from its menu, or **Summarize thread** in the
+command palette. A model
+writes a few lines on the goal, what was done, and where the thread stands, and T3 Code keeps the
+summary until you choose **Regenerate**. Summaries use the text generation model unless you turn on
+**Thread summary model** in **Settings → Threads → Text generation**; **Thread summary
+instructions** under Advanced change how they are written. Writing a summary needs permission to
+operate threads; reading one does not.
+
 Agents connected through T3 Code can use the same server-owned metadata workflow to
 rename a thread, regenerate its title, or link and unlink a pull request. These changes
 appear on web, desktop, and mobile without requiring the originating browser to remain

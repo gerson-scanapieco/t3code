@@ -359,6 +359,10 @@
       "types": "./src/state/issueTrackers.ts",
       "default": "./src/state/issueTrackers.ts"
     },
+    "./state/thread-summaries": {
+      "types": "./src/state/threadSummaries.ts",
+      "default": "./src/state/threadSummaries.ts"
+    },
     "./state/source-control": {
       "types": "./src/state/sourceControl.ts",
       "default": "./src/state/sourceControl.ts"

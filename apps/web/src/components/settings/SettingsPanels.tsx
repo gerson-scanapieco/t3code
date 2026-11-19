@@ -68,6 +68,10 @@ import { useOptionalSettingsScope, useSettingsScope } from "./SettingsScopeConte
 import { scopedIdleCompaction } from "./scopedSettings";
 import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
 import { ThreadTitleInstructionsSettings } from "./ThreadTitleInstructionsSettings";
+import {
+  ThreadSummaryInstructionsSettings,
+  ThreadSummaryModelSettings,
+} from "./ThreadSummarySettings";
 import { SnoozePresetsRow } from "./SnoozePresetsSettings";
 import { useDesktopUpdateState } from "../../state/desktopUpdate";
 import { managedTelemetryOffMessage, usePrimaryManagedPolicy } from "../../state/managedPolicy";
@@ -635,6 +639,13 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.threadTitleInstructions !== DEFAULT_UNIFIED_SETTINGS.threadTitleInstructions
       ? [gt("Thread title instructions")]
       : []),
+    ...(settings.threadSummaryModelSelection !==
+    DEFAULT_UNIFIED_SETTINGS.threadSummaryModelSelection
+      ? [gt("Thread summary model")]
+      : []),
+    ...(settings.threadSummaryInstructions !== DEFAULT_UNIFIED_SETTINGS.threadSummaryInstructions
+      ? [gt("Thread summary instructions")]
+      : []),
     ...getChangedBrowserSettingLabels(settings, messages),
     ...(settings.enableAgentBrowserAccess !== DEFAULT_UNIFIED_SETTINGS.enableAgentBrowserAccess
       ? [gt("Agent browser access")]
@@ -748,6 +759,8 @@ export function useSettingsRestore(onRestored?: () => void) {
       confirmQuit: DEFAULT_UNIFIED_SETTINGS.confirmQuit,
       textGenerationModelSelection: DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
       threadTitleInstructions: DEFAULT_UNIFIED_SETTINGS.threadTitleInstructions,
+      threadSummaryModelSelection: DEFAULT_UNIFIED_SETTINGS.threadSummaryModelSelection,
+      threadSummaryInstructions: DEFAULT_UNIFIED_SETTINGS.threadSummaryInstructions,
       fontFamilySans: DEFAULT_UNIFIED_SETTINGS.fontFamilySans,
       fontFamilyComposer: DEFAULT_UNIFIED_SETTINGS.fontFamilyComposer,
       fontFamilyCode: DEFAULT_UNIFIED_SETTINGS.fontFamilyCode,
@@ -2242,10 +2255,16 @@ export function ThreadsSettingsPanel() {
             )
           }
         />
+        <ThreadSummaryModelSettings />
         <AdvancedSettings
-          targetIds={[setting("thread-title-instructions").id, setting("response-streaming").id]}
+          targetIds={[
+            setting("thread-title-instructions").id,
+            setting("thread-summary-instructions").id,
+            setting("response-streaming").id,
+          ]}
         >
           <ThreadTitleInstructionsSettings />
+          <ThreadSummaryInstructionsSettings />
           <SettingsRow
             serverScoped
             settingKeys={["responseStreamingMode"]}

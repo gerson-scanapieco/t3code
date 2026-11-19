@@ -939,6 +939,20 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [msg("generated thread titles prompt custom style naming rename regenerate")],
   },
   {
+    id: "thread-summary-model",
+    title: msg("Thread summary model"),
+    to: "/settings/threads",
+    scope: "project-defaults",
+    searchTerms: [msg("summarize recap overview generated summary effort reasoning provider")],
+  },
+  {
+    id: "thread-summary-instructions",
+    title: msg("Thread summary instructions"),
+    to: "/settings/threads",
+    scope: "project-defaults",
+    searchTerms: [msg("summarize recap overview prompt custom style format")],
+  },
+  {
     id: "app-version",
     title: msg("Version"),
     to: "/settings/about",
