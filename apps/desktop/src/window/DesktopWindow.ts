@@ -12,6 +12,7 @@ import * as Electron from "electron";
 import { msg } from "gt-i18n";
 
 import { type DesktopSnapShotEvent, DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts";
+import { MAX_WINDOW_OPACITY } from "@t3tools/contracts/settings";
 
 import * as DesktopAssets from "../app/DesktopAssets.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
@@ -145,6 +146,7 @@ export class DesktopWindow extends Context.Service<
     readonly zoomMain: (direction: MainWindowZoomDirection) => Effect.Effect<void>;
     readonly runMainContentsCommand: (command: MainWindowContentsCommand) => Effect.Effect<void>;
     readonly syncAppearance: Effect.Effect<void>;
+    readonly setWindowOpacity: (windowOpacity: number) => Effect.Effect<void>;
   }
 >()("@t3tools/desktop/window/DesktopWindow") {}
 
@@ -165,6 +167,35 @@ function getIconOption(
 
 function getInitialWindowBackgroundColor(shouldUseDarkColors: boolean): string {
   return shouldUseDarkColors ? "#000000" : "#ffffff";
+}
+
+export interface MainWindowMaterial {
+  readonly backgroundColor: string;
+  readonly vibrancy: "under-window" | null;
+}
+
+/** Below full opacity, macOS main windows show the blurred desktop through a clear background. */
+export function resolveMainWindowMaterial(input: {
+  readonly platform: NodeJS.Platform;
+  readonly shouldUseDarkColors: boolean;
+  readonly windowOpacity: number;
+}): MainWindowMaterial {
+  return input.platform === "darwin" && input.windowOpacity < MAX_WINDOW_OPACITY
+    ? { backgroundColor: "#00000000", vibrancy: "under-window" }
+    : {
+        backgroundColor: getInitialWindowBackgroundColor(input.shouldUseDarkColors),
+        vibrancy: null,
+      };
+}
+
+function applyMainWindowMaterial(
+  window: Electron.BrowserWindow,
+  material: MainWindowMaterial,
+  platform: NodeJS.Platform,
+): void {
+  if (window.isDestroyed()) return;
+  window.setBackgroundColor(material.backgroundColor);
+  if (platform === "darwin") window.setVibrancy(material.vibrancy);
 }
 
 type DisplayBounds = Pick<Electron.Rectangle, "x" | "y" | "width" | "height">;
@@ -348,13 +379,14 @@ function syncWindowAppearance(
   hasTitleBarOverlay: boolean,
   shouldUseDarkColors: boolean,
   platform: NodeJS.Platform,
+  backgroundColor: string,
 ): Effect.Effect<void> {
   return Effect.sync(() => {
     if (window.isDestroyed()) {
       return;
     }
 
-    window.setBackgroundColor(getInitialWindowBackgroundColor(shouldUseDarkColors));
+    window.setBackgroundColor(backgroundColor);
     const { titleBarOverlay } = getWindowTitleBarOptions(shouldUseDarkColors, platform);
     if (hasTitleBarOverlay && typeof titleBarOverlay === "object") {
       window.setTitleBarOverlay(titleBarOverlay);
@@ -396,6 +428,7 @@ export const make = Effect.gen(function* () {
   const electronApp = yield* ElectronApp.ElectronApp;
   const rendererHistory = yield* DesktopRendererHistory.DesktopRendererHistory;
   const backendReadyRef = yield* Ref.make(false);
+  const windowOpacityRef = yield* Ref.make<number>(MAX_WINDOW_OPACITY);
   let backendHasStarted = false;
   let mainClosedDuringStartup = false;
   const splashWindowRef = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
@@ -453,6 +486,21 @@ export const make = Effect.gen(function* () {
     const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;
     const persistedSettings = yield* desktopSettings.get;
     const persistedBounds = persistedSettings.mainWindowBounds;
+    const windowOpacity = yield* clientSettings.get.pipe(
+      Effect.map(
+        Option.match({
+          onNone: () => DEFAULT_CLIENT_SETTINGS.windowOpacity,
+          onSome: (settings) => settings.windowOpacity,
+        }),
+      ),
+      Effect.orElseSucceed(() => DEFAULT_CLIENT_SETTINGS.windowOpacity),
+    );
+    yield* Ref.set(windowOpacityRef, windowOpacity);
+    const material = resolveMainWindowMaterial({
+      platform: environment.platform,
+      shouldUseDarkColors,
+      windowOpacity,
+    });
     const displayBoundsResult = yield* Effect.sync(() => {
       try {
         return {
@@ -481,8 +529,15 @@ export const make = Effect.gen(function* () {
       minHeight: DesktopAppSettings.MIN_MAIN_WINDOW_SIZE.height,
       show: false,
       autoHideMenuBar: true,
-      ...(environment.platform === "darwin" ? { disableAutoHideCursor: true } : {}),
-      backgroundColor: getInitialWindowBackgroundColor(shouldUseDarkColors),
+      ...(environment.platform === "darwin"
+        ? {
+            disableAutoHideCursor: true,
+            // Constructor-only; keeps vibrancy turned on later from dimming while unfocused.
+            visualEffectState: "active" as const,
+            ...(material.vibrancy === null ? {} : { vibrancy: material.vibrancy }),
+          }
+        : {}),
+      backgroundColor: material.backgroundColor,
       ...iconOption,
       title: environment.displayName,
       ...getWindowTitleBarOptions(shouldUseDarkColors, environment.platform),
@@ -1218,10 +1273,38 @@ export const make = Effect.gen(function* () {
     }),
     syncAppearance: Effect.gen(function* () {
       const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;
+      const mainWindow = Option.getOrNull(yield* electronWindow.main);
+      const mainMaterial = resolveMainWindowMaterial({
+        platform: environment.platform,
+        shouldUseDarkColors,
+        windowOpacity: yield* Ref.get(windowOpacityRef),
+      });
       yield* electronWindow.syncAllAppearance((window, { titleBarOverlay }) =>
-        syncWindowAppearance(window, titleBarOverlay, shouldUseDarkColors, environment.platform),
+        syncWindowAppearance(
+          window,
+          titleBarOverlay,
+          shouldUseDarkColors,
+          environment.platform,
+          window === mainWindow
+            ? mainMaterial.backgroundColor
+            : getInitialWindowBackgroundColor(shouldUseDarkColors),
+        ),
       );
     }).pipe(Effect.withSpan("desktop.window.syncAppearance")),
+    setWindowOpacity: Effect.fn("desktop.window.setWindowOpacity")(function* (windowOpacity) {
+      const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;
+      const resolve = (opacity: number) =>
+        resolveMainWindowMaterial({
+          platform: environment.platform,
+          shouldUseDarkColors,
+          windowOpacity: opacity,
+        });
+      const previous = resolve(yield* Ref.getAndSet(windowOpacityRef, windowOpacity));
+      const next = resolve(windowOpacity);
+      if (previous.vibrancy === next.vibrancy) return;
+      const window = yield* electronWindow.main;
+      if (Option.isSome(window)) applyMainWindowMaterial(window.value, next, environment.platform);
+    }),
   });
 });
 

@@ -48,6 +48,7 @@ import {
 import { syncBrowserChromeTheme } from "./hooks/useTheme";
 import { startThreadVisitedMigration } from "./hooks/useThreadVisitedMigration";
 import { installDesktopPasteAsText } from "./lib/desktopPasteAsText";
+import { isWindowTranslucent } from "./lib/windowOpacity";
 import {
   syncDocumentElectronPlatformClasses,
   syncDocumentWindowControlsOverlayClass,
@@ -98,6 +99,15 @@ function startClientAppearance(): void {
         root.style.setProperty("--glass-blur", "0px");
       } else {
         root.style.removeProperty("--glass-blur");
+      }
+    }
+    if (previous?.windowOpacity !== settings.windowOpacity) {
+      const translucent = isWindowTranslucent(settings.windowOpacity);
+      root.classList.toggle("window-translucent", translucent);
+      if (translucent) {
+        root.style.setProperty("--window-opacity", `${settings.windowOpacity}%`);
+      } else {
+        root.style.removeProperty("--window-opacity");
       }
     }
     if (

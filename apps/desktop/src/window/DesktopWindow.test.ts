@@ -129,6 +129,7 @@ function makeFakeBrowserWindow() {
     setOpacity: vi.fn(),
     setTitle: vi.fn(),
     setTitleBarOverlay: vi.fn(),
+    setVibrancy: vi.fn(),
     setWindowButtonPosition: vi.fn(),
     show: vi.fn(),
     webContents,
@@ -1285,6 +1286,58 @@ describe("DesktopWindow", () => {
       assert.lengthOf(vi.mocked(framed.window.setTitleBarOverlay).mock.calls, 0);
       assert.deepEqual(vi.mocked(overlay.window.setBackgroundColor).mock.calls, [["#ffffff"]]);
       assert.lengthOf(vi.mocked(overlay.window.setTitleBarOverlay).mock.calls, 1);
+    }),
+  );
+
+  it("keeps main windows opaque at full window opacity and off macOS", () => {
+    const opaque: DesktopWindow.MainWindowMaterial = { backgroundColor: "#ffffff", vibrancy: null };
+    const translucent: DesktopWindow.MainWindowMaterial = {
+      backgroundColor: "#00000000",
+      vibrancy: "under-window",
+    };
+    const resolve = (platform: NodeJS.Platform, windowOpacity: number) =>
+      DesktopWindow.resolveMainWindowMaterial({
+        platform,
+        shouldUseDarkColors: false,
+        windowOpacity,
+      });
+    assert.deepEqual(resolve("darwin", 100), opaque);
+    assert.deepEqual(resolve("darwin", 85), translucent);
+    assert.deepEqual(resolve("win32", 85), opaque);
+    assert.deepEqual(resolve("linux", 50), opaque);
+  });
+
+  it.effect("applies window opacity live and keeps it through appearance syncs", () =>
+    Effect.gen(function* () {
+      const main = makeFakeBrowserWindow();
+      const popup = makeFakeBrowserWindow();
+      const layer = layerTest({
+        window: main.window,
+        createCount: yield* Ref.make(0),
+        mainWindow: yield* Ref.make(Option.some(main.window)),
+        platform: "darwin",
+        appearanceWindows: [
+          { window: main.window, titleBarOverlay: false },
+          { window: popup.window, titleBarOverlay: false },
+        ],
+      });
+
+      yield* Effect.gen(function* () {
+        const desktopWindow = yield* DesktopWindow.DesktopWindow;
+        yield* desktopWindow.setWindowOpacity(85);
+        yield* desktopWindow.setWindowOpacity(70);
+        yield* desktopWindow.syncAppearance;
+        yield* desktopWindow.setWindowOpacity(100);
+      }).pipe(Effect.provide(layer));
+
+      assert.deepEqual(vi.mocked(main.window.setVibrancy).mock.calls, [["under-window"], [null]]);
+      assert.deepEqual(vi.mocked(main.window.setBackgroundColor).mock.calls, [
+        ["#00000000"],
+        ["#00000000"],
+        ["#ffffff"],
+      ]);
+      assert.deepEqual(vi.mocked(popup.window.setBackgroundColor).mock.calls, [["#ffffff"]]);
+      assert.lengthOf(vi.mocked(popup.window.setVibrancy).mock.calls, 0);
     }),
   );
 

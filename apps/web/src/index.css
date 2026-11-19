@@ -6,6 +6,8 @@
 @custom-variant light (&:not(.dark, .dark *));
 /* Window Controls Overlay: active when Electron exposes native titlebar control geometry. */
 @custom-variant wco (&:is(.wco, .wco *));
+/* Window opacity below 100% on the macOS desktop app: the window's canvas lets the blurred desktop through. */
+@custom-variant window-translucent (&:is(.window-translucent *));
 
 /* Secondary hovering pointers reveal sidebar actions on touch-primary devices. */
 @custom-variant any-hover {
@@ -732,6 +734,11 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   html,
   body {
     background-color: var(--app-chrome-background);
+  }
+  /* Important beats the inline colors syncBrowserChromeTheme writes; the canvas layers paint instead. */
+  html.window-translucent,
+  html.window-translucent body {
+    background-color: transparent !important;
   }
   body {
     @apply text-foreground relative;
@@ -1468,6 +1475,10 @@ html[data-theme-token-probe] *::after {
 html[data-theme-id] [data-chat-header] {
   background-color: var(--toolbar-background);
   color: var(--contrast-toolbar-foreground);
+}
+
+html.window-translucent[data-theme-id] [data-chat-header] {
+  background-color: transparent;
 }
 
 html[data-theme-id] [data-chat-header] [data-slot="button"],

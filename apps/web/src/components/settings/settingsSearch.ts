@@ -354,6 +354,15 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [msg("transparent transparency solid menus dialogs composer")],
   },
   {
+    // Prefixed because the slider control already owns the `window-opacity` id.
+    id: "setting-window-opacity",
+    title: msg("Window opacity"),
+    to: "/settings/appearance",
+    searchTerms: [msg("transparent transparency translucent blur vibrancy background desktop")],
+    desktopOnly: true,
+    macOnly: true,
+  },
+  {
     id: "diff-color-scheme",
     title: msg("Diff colors"),
     to: "/settings/diffs",
