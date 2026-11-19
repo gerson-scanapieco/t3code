@@ -2618,7 +2618,38 @@
   ],
   "ac049cf1be6726fc": "Comando",
   "7de9d2f24736adbc": "URL de vista previa (opcional)",
-  "70b6c86afbdf0aad": "Abre esta URL en la vista previa de la app cuando se ejecute esta acción.",
+  "53204f48808940b1": [
+    "Abre esta URL en la vista previa de la app cuando se ejecute esta acción. Usa",
+    " ",
+    {
+      "t": "code",
+      "i": 1,
+      "c": {
+        "i": 2,
+        "k": "_gt_value_2",
+        "v": "v"
+      }
+    },
+    " ",
+    "para rellenar una variable de ",
+    {
+      "t": "code",
+      "i": 3,
+      "c": ".env.local"
+    },
+    " en el worktree del hilo o del entorno de la acción, por ejemplo",
+    " ",
+    {
+      "t": "code",
+      "i": 4,
+      "c": {
+        "i": 5,
+        "k": "_gt_value_5",
+        "v": "v"
+      }
+    },
+    "."
+  ],
   "77653142b03d1f67": "Ejecutar automáticamente al crear el worktree",
   "14b0d0551eb4b4dc": "Esperar a que termine antes de que empiece el agente",
   "7f8696ec0b38b0db": "Ejecutar en el worktree del hilo cuando el hilo se resuelva",
@@ -4558,6 +4589,7 @@
   "fb8b1585e3724cda": "Se necesita una actualización manual",
   "72d19a2106b69467": "No se pudo ejecutar el script \"{name}\".",
   "703f773d7151e52f": "No se pudo abrir la vista previa",
+  "9ef9f7aa49b2e24d": "La URL de vista previa usa {variables}, que no está definida en {file} ni en el entorno de la acción.",
   "6cfd50d2497b66bd": "Bloque de código del chat",
   "a5db77c29b7675b0": "Esta pregunta no admite adjuntos.",
   "ebb9d93e29740cd2": "Puedes adjuntar hasta {max} archivos por mensaje.",

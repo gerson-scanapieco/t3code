@@ -521,7 +521,18 @@ function ProjectScriptEditorForm({
                 onChange={(event) => setPreviewUrl(event.target.value)}
               />
               <p className="text-xs text-muted-foreground">
-                <T>Open this URL in the in-app preview when this action runs.</T>
+                <T>
+                  Open this URL in the in-app preview when this action runs. Use{" "}
+                  <code>
+                    <Var>{"${NAME}"}</Var>
+                  </code>{" "}
+                  to fill in a variable from <code>.env.local</code> in the thread's worktree or the
+                  action's environment, such as{" "}
+                  <code>
+                    <Var>{"http://127.0.0.1:${PORT}"}</Var>
+                  </code>
+                  .
+                </T>
               </p>
             </div>
             <label className="flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2 text-sm dark:border-transparent dark:bg-white/[0.035]">

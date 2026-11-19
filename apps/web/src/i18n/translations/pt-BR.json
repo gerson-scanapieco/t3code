@@ -2618,7 +2618,38 @@
   ],
   "ac049cf1be6726fc": "Comando",
   "7de9d2f24736adbc": "URL de pré-visualização (opcional)",
-  "70b6c86afbdf0aad": "Abre esta URL na pré-visualização do app quando a ação é executada.",
+  "53204f48808940b1": [
+    "Abre esta URL na pré-visualização do app quando a ação é executada. Use",
+    " ",
+    {
+      "t": "code",
+      "i": 1,
+      "c": {
+        "i": 2,
+        "k": "_gt_value_2",
+        "v": "v"
+      }
+    },
+    " ",
+    "para preencher uma variável de ",
+    {
+      "t": "code",
+      "i": 3,
+      "c": ".env.local"
+    },
+    " no worktree da thread ou do ambiente da ação, por exemplo",
+    " ",
+    {
+      "t": "code",
+      "i": 4,
+      "c": {
+        "i": 5,
+        "k": "_gt_value_5",
+        "v": "v"
+      }
+    },
+    "."
+  ],
   "77653142b03d1f67": "Executar automaticamente ao criar um worktree",
   "14b0d0551eb4b4dc": "Aguardar o término antes de o agente começar",
   "7f8696ec0b38b0db": "Executar no worktree da thread quando ela for concluída",
@@ -4558,6 +4589,7 @@
   "fb8b1585e3724cda": "Atualização manual necessária",
   "72d19a2106b69467": "Falha ao executar o script \"{name}\".",
   "703f773d7151e52f": "Não foi possível abrir a pré-visualização",
+  "9ef9f7aa49b2e24d": "A URL de pré-visualização usa {variables}, que não está definida em {file} nem no ambiente da ação.",
   "6cfd50d2497b66bd": "Bloco de código do chat",
   "a5db77c29b7675b0": "Esta pergunta não aceita anexos.",
   "ebb9d93e29740cd2": "Você pode anexar até {max} arquivos por mensagem.",

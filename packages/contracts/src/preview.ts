@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 import { NonNegativeInt, PositiveInt, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { BROWSER_PROFILE_MAX_COUNT, BrowserProfile, BrowserProfileId } from "./browserProfile.ts";
+import { TerminalEnvSchema } from "./terminal.ts";
 
 export const PREVIEW_URL_MAX_LENGTH = 2_048;
 export const CONFIGURED_LOCAL_SERVER_URLS_MAX_ITEMS = 32;
@@ -345,6 +346,39 @@ export class PreviewStopLocalServerError extends Schema.TaggedError<PreviewStopL
       case "signal-failed":
         return "The server's processes could not be signaled.";
     }
+  }
+}
+
+export const PreviewResolveActionUrlInput = Schema.Struct({
+  /** The action's working directory: the thread's worktree or the project root. */
+  cwd: TrimmedNonEmptyString,
+  url: Url,
+  /** The runtime environment T3 gives the action's terminal. */
+  env: Schema.optional(TerminalEnvSchema),
+});
+export type PreviewResolveActionUrlInput = typeof PreviewResolveActionUrlInput.Type;
+
+export const PreviewResolveActionUrlResult = Schema.Struct({ url: Url });
+export type PreviewResolveActionUrlResult = typeof PreviewResolveActionUrlResult.Type;
+
+export class PreviewActionUrlVariablesMissingError extends Schema.TaggedError<PreviewActionUrlVariablesMissingError>()(
+  "PreviewActionUrlVariablesMissingError",
+  {
+    variables: Schema.Array(Schema.String),
+    envFilePath: Schema.String,
+  },
+) {
+  override get message() {
+    return `The preview URL uses ${this.variables.join(", ")}, which is not set in ${this.envFilePath} or the action's environment.`;
+  }
+}
+
+export class PreviewActionUrlEnvFileReadError extends Schema.TaggedError<PreviewActionUrlEnvFileReadError>()(
+  "PreviewActionUrlEnvFileReadError",
+  { envFilePath: Schema.String, cause: Schema.Defect() },
+) {
+  override get message() {
+    return `Could not read ${this.envFilePath} to fill in the preview URL.`;
   }
 }
 

@@ -2618,7 +2618,38 @@
   ],
   "ac049cf1be6726fc": "Kommando",
   "7de9d2f24736adbc": "Förhandsvisnings-URL (valfritt)",
-  "70b6c86afbdf0aad": "Öppna den här URL:en i appens förhandsvisning när åtgärden körs.",
+  "53204f48808940b1": [
+    "Öppna den här URL:en i appens förhandsvisning när åtgärden körs. Använd",
+    " ",
+    {
+      "t": "code",
+      "i": 1,
+      "c": {
+        "i": 2,
+        "k": "_gt_value_2",
+        "v": "v"
+      }
+    },
+    " ",
+    "för att fylla i en variabel från ",
+    {
+      "t": "code",
+      "i": 3,
+      "c": ".env.local"
+    },
+    " i trådens worktree eller från åtgärdens miljö, till exempel",
+    " ",
+    {
+      "t": "code",
+      "i": 4,
+      "c": {
+        "i": 5,
+        "k": "_gt_value_5",
+        "v": "v"
+      }
+    },
+    "."
+  ],
   "77653142b03d1f67": "Kör automatiskt när en worktree skapas",
   "14b0d0551eb4b4dc": "Vänta tills den är klar innan agenten startar",
   "7f8696ec0b38b0db": "Kör i trådens worktree när tråden blir klar",
@@ -4559,6 +4590,7 @@
   "fb8b1585e3724cda": "Manuell uppdatering krävs",
   "72d19a2106b69467": "Det gick inte att köra skriptet ”{name}”.",
   "703f773d7151e52f": "Kunde inte öppna förhandsvisningen",
+  "9ef9f7aa49b2e24d": "Förhandsvisnings-URL:en använder {variables}, som inte är satt i {file} eller i åtgärdens miljö.",
   "6cfd50d2497b66bd": "Kodblock i chatten",
   "a5db77c29b7675b0": "Den här frågan kan inte ta emot bilagor.",
   "ebb9d93e29740cd2": "Du kan bifoga upp till {max} filer per meddelande.",

@@ -61,7 +61,7 @@ export const T3ProjectFileScript = Schema.Struct({
   previewUrl: Schema.optionalKey(
     trimmedNonEmpty({
       description:
-        "URL opened in the in-app browser preview when this script runs. Only honored on the desktop build.",
+        "URL opened in the in-app browser preview when this script runs. Only honored on the desktop build. `${NAME}` placeholders are filled when the script runs, from `.env.local` in its working directory (the thread's worktree or the project root) and then from the script's environment, e.g. \"http://127.0.0.1:${PORT}\".",
     }),
   ),
   autoOpenPreview: Schema.optionalKey(

@@ -331,6 +331,10 @@
       "types": "./src/preview.ts",
       "import": "./src/preview.ts"
     },
+    "./previewUrlTemplate": {
+      "types": "./src/previewUrlTemplate.ts",
+      "import": "./src/previewUrlTemplate.ts"
+    },
     "./previewViewport": {
       "types": "./src/previewViewport.ts",
       "import": "./src/previewViewport.ts"

@@ -76,6 +76,10 @@ export function createPreviewEnvironmentAtoms<R, E>(
       label: "environment-data:preview:stop-local-server",
       tag: WS_METHODS.previewStopLocalServer,
     }),
+    resolveActionUrl: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:preview:resolve-action-url",
+      tag: WS_METHODS.previewResolveActionUrl,
+    }),
     reportStatus: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:preview:report-status",
       tag: WS_METHODS.previewReportStatus,
