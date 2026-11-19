@@ -22,6 +22,7 @@ export type ThreadActionMenuId =
   | "unsnooze"
   | "rename"
   | "regenerate-title"
+  | "summary"
   | "mark-unread"
   | "share-guest"
   | "copy"
@@ -129,6 +130,7 @@ export function threadActionRequiresOperate(action: ThreadActionMenuId): boolean
     "find",
     "new-thread-on-branch",
     "project-settings",
+    "summary",
     "mark-unread",
     "share-guest",
     "copy",
@@ -211,6 +213,7 @@ export function buildThreadActionMenuItems(
           },
         ]
       : []),
+    { id: "summary", label: resolve(msg("Thread summary")), icon: "file-text" },
     { id: "mark-unread", label: resolve(msg("Mark unread")), icon: "mail-open" },
     ...(state.canShareWithGuest
       ? [{ id: "share-guest" as const, label: resolve(msg("Share with guest")), icon: "user-plus" }]

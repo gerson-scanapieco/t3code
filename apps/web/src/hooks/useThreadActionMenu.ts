@@ -2,6 +2,7 @@ import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { requestCustomSnooze } from "../components/CustomSnoozeDialog";
 import { openGuestShareDialog } from "../components/chat/guestShareDialogState";
+import { openThreadSummaryDialog } from "../components/threadSummaryDialogState";
 import {
   type AtomCommandResult,
   isAtomCommandInterrupted,
@@ -267,6 +268,9 @@ export function useThreadActionMenu(input: {
           if (toast) toastManager.add(toast);
           return;
         }
+        case "summary":
+          openThreadSummaryDialog(threadRef);
+          return;
         case "mark-unread":
           markThreadUnread(threadRef);
           return;

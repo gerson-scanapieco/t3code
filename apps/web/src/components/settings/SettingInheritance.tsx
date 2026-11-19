@@ -58,7 +58,7 @@ function formatValue(
         ? resolve(msg("Never"))
         : key === "defaultModelSelection"
           ? resolve(msg("Automatic"))
-          : key === "sourceControlWriterModelSelection"
+          : key === "sourceControlWriterModelSelection" || key === "threadSummaryModelSelection"
             ? resolve(msg("Text generation model"))
             : key === "reviewGuideModelSelection"
               ? resolve(msg("Source control writer model"))
