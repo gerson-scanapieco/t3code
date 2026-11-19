@@ -268,11 +268,13 @@ To stop what a worktree started outside its folder, such as a dev server or a Do
 **Run in the thread's worktree before it is deleted** for one of the project's actions, or set
 `"runOnWorktreeDelete": true` on a `t3.json` script. It runs in the worktree each time T3 Code
 removes one: when you delete a thread with its worktree, when cleanup removes it, or when a
-thread's start is cancelled or fails after its worktree was created. It runs in the background rather than in a terminal,
+thread's start is cancelled or fails after its worktree was created. It runs in the background with the system shell (`/bin/sh`, not your login shell or its profile) rather than in a terminal,
 with `T3CODE_WORKTREE_PATH` and `T3CODE_PROJECT_ROOT` set, and is stopped after 3 minutes. If it
 exits with an error or times out, the worktree is kept: deleting shows the action's last line of
 output, and cleanup lists it as kept and tries again on its next run. Fix the action, or turn the
-option off, to remove the worktree.
+option off, and then delete the worktree again: with **Delete worktrees with deleted threads**
+on, cleanup removes it on its next run; otherwise remove it with `git worktree remove`. A worktree created for a start that was cancelled or failed is
+removed even if the action fails.
 
 Choose **Delete now** to run the enabled rules immediately. The latest results show which
 worktrees were removed or kept and why, plus any failures.

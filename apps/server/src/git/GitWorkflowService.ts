@@ -19,6 +19,7 @@ import {
   type GitPreparePullRequestThreadResult,
   type GitPullRequestRefInput,
   type VcsPullResult,
+  type OrchestrationV2LinkOrigin,
   type VcsRemoveWorktreeInput,
   type GitResolvePullRequestResult,
   type GitRunStackedActionInput,
@@ -128,8 +129,18 @@ export class GitWorkflowService extends Context.Service<
       cwd: string,
       remoteName: string,
     ) => Effect.Effect<string | null, GitCommandError>;
+    /**
+     * Runs the project's delete action first. Its failure keeps the worktree, except in a
+     * `rollback` of one just created, which is removed anyway so it is not left behind.
+     */
     readonly removeWorktree: (
       input: VcsRemoveWorktreeInput,
+      options?: {
+        readonly rollback?: boolean;
+        readonly skipDeleteAction?: boolean;
+        readonly threadId?: string;
+        readonly linkOrigin?: OrchestrationV2LinkOrigin;
+      },
     ) => Effect.Effect<void, GitCommandError>;
     readonly pruneWorktrees: (input: {
       readonly cwd: string;
@@ -513,23 +524,35 @@ export const make = Effect.gen(function* () {
         );
       },
     ),
-    removeWorktree: Effect.fn("GitWorkflowService.removeWorktree")(function (input) {
+    removeWorktree: Effect.fn("GitWorkflowService.removeWorktree")(function (input, options) {
       return ensureGitCommand("GitWorkflowService.removeWorktree", input.cwd).pipe(
         Effect.andThen(
-          projectScripts.runOnWorktreeDelete({ projectCwd: input.cwd, worktreePath: input.path }),
+          options?.skipDeleteAction === true
+            ? Effect.void
+            : projectScripts.runOnWorktreeDelete({
+                projectCwd: input.cwd,
+                worktreePath: input.path,
+                ...(options?.threadId === undefined ? {} : { threadId: options.threadId }),
+                ...(options?.linkOrigin === undefined ? {} : { linkOrigin: options.linkOrigin }),
+              }),
         ),
         Effect.catchTags({
           ProjectWorktreeDeleteScriptError: (error) =>
-            Effect.fail(
-              new GitCommandError({
-                operation: "GitWorkflowService.removeWorktree",
-                command: error.command,
-                cwd: error.worktreePath,
-                ...(error.exitCode === null ? {} : { exitCode: error.exitCode }),
-                detail: `${error.message} The worktree was kept.`,
-                cause: error,
-              }),
-            ),
+            options?.rollback === true
+              ? Effect.logWarning("worktree delete action failed during rollback", {
+                  worktreePath: error.worktreePath,
+                  detail: error.message,
+                })
+              : Effect.fail(
+                  new GitCommandError({
+                    operation: "GitWorkflowService.removeWorktree",
+                    command: error.command,
+                    cwd: error.worktreePath,
+                    ...(error.exitCode === null ? {} : { exitCode: error.exitCode }),
+                    detail: `${error.message} The worktree was kept.`,
+                    cause: error,
+                  }),
+                ),
         }),
         Effect.andThen(git.removeWorktree(input)),
       );

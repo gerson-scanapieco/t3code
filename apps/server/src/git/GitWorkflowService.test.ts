@@ -113,7 +113,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("GitWorkflowServi
       ),
     );
   });
-  it.effect("keeps the worktree when the project's delete script fails", () =>
+  it.effect("keeps the worktree when the delete script fails, unless rolling back", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const root = yield* fileSystem.realPath(
@@ -140,6 +140,8 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("GitWorkflowServi
         'Delete action "Teardown" exited with code 1: stack still up. The worktree was kept.',
       );
       assert.isTrue(yield* fileSystem.exists(worktreePath));
+      yield* workflow.removeWorktree({ cwd, path: worktreePath, force: true }, { rollback: true });
+      assert.isFalse(yield* fileSystem.exists(worktreePath));
     }).pipe(
       Effect.scoped,
       Effect.provide(

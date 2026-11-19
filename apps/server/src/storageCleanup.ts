@@ -1574,6 +1574,7 @@ const make = Effect.gen(function* () {
                 projectId: thread.projectId,
                 projectCwd: project.workspaceRoot,
                 worktreePath,
+                ...(thread.linkOrigin === undefined ? {} : { linkOrigin: thread.linkOrigin }),
               })
               .pipe(
                 Effect.as(null),

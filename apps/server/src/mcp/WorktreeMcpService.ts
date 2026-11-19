@@ -267,17 +267,22 @@ const make = Effect.gen(function* () {
           });
 
         const removeCreatedWorktree = Effect.suspend(() =>
-          gitWorkflow.removeWorktree({ cwd: projectCwd, path: worktreePath, force: true }).pipe(
-            Effect.andThen(
-              Effect.suspend(() =>
-                gitWorkflow.deleteLocalBranch({
-                  cwd: projectCwd,
-                  refName: worktree.worktree.refName,
-                  force: true,
-                }),
+          gitWorkflow
+            .removeWorktree(
+              { cwd: projectCwd, path: worktreePath, force: true },
+              { rollback: true, threadId: scope.thread.threadId },
+            )
+            .pipe(
+              Effect.andThen(
+                Effect.suspend(() =>
+                  gitWorkflow.deleteLocalBranch({
+                    cwd: projectCwd,
+                    refName: worktree.worktree.refName,
+                    force: true,
+                  }),
+                ),
               ),
             ),
-          ),
         ).pipe(Effect.ignoreCause({ log: true }));
 
         const recheckAndBind = Effect.gen(function* () {
