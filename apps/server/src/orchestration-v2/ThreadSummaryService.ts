@@ -1,5 +1,8 @@
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import {
+  type OrchestrationV2AppThread,
+  type OrchestrationV2ConversationMessage,
+  type RunId,
   TextGenerationError,
   type ThreadId,
   type ThreadSummary,
@@ -22,7 +25,7 @@ import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as TextGeneration from "../textGeneration/TextGeneration.ts";
 import * as ProjectStore from "./ProjectStore.ts";
-import { ProjectionStoreThreadNotFoundError } from "./ProjectionStore.ts";
+import { forkInheritedRunOrdinals, ProjectionStoreThreadNotFoundError } from "./ProjectionStore.ts";
 import * as ThreadManagementService from "./ThreadManagementService.ts";
 
 export class ThreadSummaryService extends Context.Service<
@@ -69,6 +72,46 @@ const make = Effect.gen(function* () {
     detail: "This thread no longer exists.",
   });
 
+  const messagesThroughRun = Effect.fn("ThreadSummaryService.messagesThroughRun")(function* (
+    threadId: ThreadId,
+    runId: RunId,
+    forkCreatedAt: DateTime.Utc,
+  ) {
+    const source = yield* threads.getThreadRecords(threadId, ["messages", "runs"], {
+      messageRoles: ["user", "assistant"],
+    });
+    const ordinals = forkInheritedRunOrdinals(source.runs, forkCreatedAt);
+    const forkOrdinal = ordinals.get(runId);
+    if (forkOrdinal === undefined) return undefined;
+    const messages = source.messages.filter((message) => {
+      if (message.runId === null) return source.thread.historyOrigin === "v1_import";
+      return (ordinals.get(message.runId) ?? Infinity) <= forkOrdinal;
+    });
+    return { thread: source.thread, messages };
+  });
+
+  // A fork's own messages start after the history it inherited, which lives on its source threads.
+  const inheritedMessages = Effect.fn("ThreadSummaryService.inheritedMessages")(function* (
+    thread: OrchestrationV2AppThread,
+  ) {
+    const history: Array<ReadonlyArray<OrchestrationV2ConversationMessage>> = [];
+    const seen = new Set([thread.id]);
+    let current = thread;
+    while (
+      current.forkedFrom?.type === "run" &&
+      current.lineage.sideChat !== true &&
+      !seen.has(current.forkedFrom.threadId)
+    ) {
+      const { threadId, runId } = current.forkedFrom;
+      seen.add(threadId);
+      const source = yield* messagesThroughRun(threadId, runId, current.createdAt);
+      if (source === undefined) break;
+      history.push(source.messages);
+      current = source.thread;
+    }
+    return history.reverse().flat();
+  });
+
   const write = Effect.fn("ThreadSummaryService.write")(
     function* (threadId: ThreadId) {
       const projection = yield* threads
@@ -89,8 +132,9 @@ const make = Effect.gen(function* () {
           detail: "This thread's project no longer exists.",
         });
       }
+      const inherited = yield* inheritedMessages(projection.thread);
       const context = formatThreadTitleContext(
-        projection.messages.filter((message) => !message.streaming),
+        [...inherited, ...projection.messages].filter((message) => !message.streaming),
         { context: THREAD_SUMMARY_TRANSCRIPT_LIMIT, message: MESSAGE_LIMIT },
       );
       if (context.message.length === 0) {

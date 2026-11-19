@@ -7,6 +7,8 @@ import {
   ProjectId,
   ProviderDriverKind,
   ProviderInstanceId,
+  ProviderThreadId,
+  RunId,
   type ServerProvider,
   TextGenerationError,
   ThreadId,
@@ -18,6 +20,7 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as TestClock from "effect/testing/TestClock";
 
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as ThreadSummaries from "../persistence/ThreadSummaries.ts";
@@ -149,6 +152,92 @@ const createThread = Effect.fn(function* (name: string) {
   return threadId;
 });
 
+const recordRun = Effect.fn(function* (
+  threadId: ThreadId,
+  runId: RunId,
+  ordinal: number,
+  user: string,
+  assistant: string,
+) {
+  const eventSink = yield* EventSink.EventSinkV2;
+  const now = yield* DateTime.now;
+  const providerThreadId = ProviderThreadId.make(`${threadId}:provider`);
+  const message = (role: "user" | "assistant", text: string) => ({
+    id: EventId.make(`${runId}:${role}`),
+    type: "message.updated" as const,
+    threadId,
+    runId,
+    occurredAt: now,
+    payload: {
+      id: MessageId.make(`${runId}:${role}`),
+      threadId,
+      runId,
+      nodeId: null,
+      role,
+      text,
+      attachments: [],
+      streaming: false,
+      createdBy: "user" as const,
+      creationSource: "web" as const,
+      createdAt: now,
+      updatedAt: now,
+    },
+  });
+  yield* eventSink.write({
+    events: [
+      {
+        id: EventId.make(`${runId}:created`),
+        type: "run.created",
+        threadId,
+        runId,
+        occurredAt: now,
+        payload: {
+          id: runId,
+          threadId,
+          ordinal,
+          providerInstanceId: textGenerationModel.instanceId,
+          modelSelection: textGenerationModel,
+          providerThreadId,
+          userMessageId: MessageId.make(`${runId}:user`),
+          rootNodeId: null,
+          activeAttemptId: null,
+          status: "completed",
+          requestedAt: now,
+          startedAt: now,
+          completedAt: now,
+          checkpointId: null,
+          contextHandoffId: null,
+        },
+      },
+      {
+        id: EventId.make(`${runId}:provider-thread`),
+        type: "provider-thread.updated",
+        threadId,
+        occurredAt: now,
+        payload: {
+          id: providerThreadId,
+          driver: adapter.driver,
+          providerInstanceId: textGenerationModel.instanceId,
+          providerSessionId: null,
+          appThreadId: threadId,
+          ownerNodeId: null,
+          nativeThreadRef: { driver: adapter.driver, nativeId: "native", strength: "strong" },
+          nativeConversationHeadRef: null,
+          status: "idle",
+          firstRunOrdinal: 1,
+          lastRunOrdinal: ordinal,
+          handoffIds: [],
+          forkedFrom: null,
+          createdAt: now,
+          updatedAt: now,
+        },
+      },
+      message("user", user),
+      message("assistant", assistant),
+    ],
+  });
+});
+
 const recordMessages = Effect.fn(function* (
   threadId: ThreadId,
   messages: ReadonlyArray<{ readonly role: "user" | "assistant"; readonly text: string }>,
@@ -246,7 +335,7 @@ describe("ThreadSummaryService", () => {
     }).pipe(Effect.provide(harness.layer));
   });
 
-  it.effect("uses the pinned summary model and its effort instead of the text model", () => {
+  it.effect("uses the pinned summary model, its effort, and the summary instructions", () => {
     const pinned = {
       instanceId: ProviderInstanceId.make("claudeAgent"),
       model: "claude-haiku-4-5",
@@ -254,7 +343,10 @@ describe("ThreadSummaryService", () => {
     };
     const harness = makeHarness({
       generateSummary: () => Effect.succeed({ summary: "- **Goal:** Pinned" }),
-      settings: { threadSummaryModelSelection: pinned },
+      settings: {
+        threadSummaryModelSelection: pinned,
+        threadSummaryInstructions: "Answer in one line.",
+      },
       providers: [readyProvider(pinned.instanceId, "claudeAgent")],
     });
     return Effect.gen(function* () {
@@ -263,11 +355,47 @@ describe("ThreadSummaryService", () => {
       yield* recordMessages(threadId, conversation);
 
       const summary = yield* summaries.generate(threadId);
-      assert.deepStrictEqual(
-        harness.generateThreadSummary.mock.calls[0]?.[0].modelSelection,
-        pinned,
-      );
+      const call = harness.generateThreadSummary.mock.calls[0]?.[0];
+      assert.deepStrictEqual(call?.modelSelection, pinned);
+      assert.strictEqual(call?.instructions, "Answer in one line.");
       assert.deepStrictEqual(summary.modelSelection, pinned);
+    }).pipe(Effect.provide(harness.layer));
+  });
+
+  it.effect("summarizes the history a fork inherited through its fork point", () => {
+    const harness = makeHarness({
+      generateSummary: () => Effect.succeed({ summary: "- **Goal:** Fork" }),
+    });
+    return Effect.gen(function* () {
+      const threads = yield* ThreadManagement.ThreadManagementService;
+      const summaries = yield* ThreadSummaryService.ThreadSummaryService;
+      const sourceThreadId = yield* createThread("fork-source");
+      const forkRunId = RunId.make("run:summary:fork:1");
+      yield* recordRun(sourceThreadId, forkRunId, 1, "Move sessions to Postgres", "Moved.");
+      yield* recordRun(
+        sourceThreadId,
+        RunId.make("run:summary:fork:2"),
+        2,
+        "Later work the fork never saw",
+        "Done.",
+      );
+      yield* TestClock.adjust(1);
+      const forkThreadId = ThreadId.make("thread:summary:fork-target");
+      yield* threads.dispatch({
+        type: "thread.fork",
+        commandId: CommandId.make("command:summary:fork"),
+        sourceThreadId,
+        targetThreadId: forkThreadId,
+        sourcePoint: { type: "run", runId: forkRunId },
+        sideChat: false,
+        createdBy: "user",
+        creationSource: "web",
+      });
+
+      yield* summaries.generate(forkThreadId);
+      const transcript = harness.generateThreadSummary.mock.calls[0]?.[0].transcript ?? "";
+      assert.include(transcript, "Move sessions to Postgres");
+      assert.notInclude(transcript, "Later work the fork never saw");
     }).pipe(Effect.provide(harness.layer));
   });
 

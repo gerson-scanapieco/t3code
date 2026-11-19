@@ -1,7 +1,7 @@
 import { ProviderInstanceId, ThreadId, type ThreadSummary } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { resolveThreadSummaryPresentation } from "./threadSummaryPresentation";
+import { resolveThreadSummaryPresentation } from "./threadSummaries.ts";
 
 const summary: ThreadSummary = {
   threadId: ThreadId.make("thread-1"),
@@ -31,6 +31,32 @@ describe("resolveThreadSummaryPresentation", () => {
       body: { kind: "summary", summary },
       action: { kind: "regenerate", disabled: false },
     });
+  });
+
+  it("shows a just-generated summary until the read returns one at least as new", () => {
+    const newer = {
+      ...summary,
+      markdown: "Rewrote the test.",
+      generatedAt: "2026-11-19T11:00:00.000Z",
+    };
+    expect(resolveThreadSummaryPresentation({ ...base, generated: newer }).body).toEqual({
+      kind: "summary",
+      summary: newer,
+    });
+    expect(
+      resolveThreadSummaryPresentation({
+        ...base,
+        data: { summary, generating: false },
+        generated: newer,
+      }).body,
+    ).toEqual({ kind: "summary", summary: newer });
+    expect(
+      resolveThreadSummaryPresentation({
+        ...base,
+        data: { summary: newer, generating: false },
+        generated: summary,
+      }).body,
+    ).toEqual({ kind: "summary", summary: newer });
   });
 
   it("disables the action without permission or while a run is in flight", () => {

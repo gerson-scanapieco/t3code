@@ -7,6 +7,7 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { formatModelSelectionEffort } from "@t3tools/client-runtime/state/thread-execution";
+import { resolveThreadSummaryPresentation } from "@t3tools/client-runtime/state/thread-summaries";
 import type { EnvironmentId, ThreadId, ThreadSummary } from "@t3tools/contracts";
 import { formatModelSlugName } from "@t3tools/shared/model";
 import { msg, T, useGT, useMessages } from "gt-react-native";
@@ -29,7 +30,6 @@ import { useEnvironmentQuery } from "../../state/query";
 import { threadSummaryEnvironment } from "../../state/threadSummaries";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useMarkdownPreviewStyles } from "../files/FileMarkdownPreview";
-import { resolveThreadSummaryPresentation } from "./threadSummaryPresentation";
 
 const TITLE = msg("Thread summary");
 const GENERATED_AT_FORMAT: Intl.DateTimeFormatOptions = {
@@ -63,13 +63,18 @@ export function ThreadSummarySheet({ route }: StaticScreenProps<ThreadSummaryTar
   });
   const [generating, setGenerating] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const [generated, setGenerated] = useState<ThreadSummary | null>(null);
 
   const generate = async () => {
     setGenerating(true);
     setFailure(null);
     const result = await generateSummary({ environmentId, input: { threadId } });
     setGenerating(false);
-    if (result._tag === "Success" || isAtomCommandInterrupted(result)) return;
+    if (result._tag === "Success") {
+      setGenerated(result.value);
+      return;
+    }
+    if (isAtomCommandInterrupted(result)) return;
     const error = squashAtomCommandFailure(result);
     setFailure(error instanceof Error ? error.message : gt("The summary could not be written."));
   };
@@ -90,6 +95,7 @@ export function ThreadSummarySheet({ route }: StaticScreenProps<ThreadSummaryTar
     failure,
     generating,
     canGenerate,
+    generated,
   });
   const { body, action } = presentation;
   const close = () => navigation.goBack();
