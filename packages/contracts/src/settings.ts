@@ -26,7 +26,12 @@ import { UsageLimitSourceId } from "./usageLimitSourceId.ts";
 import { UsageModelFilter } from "./usage.ts";
 import { SecretProviderId, SecretProviderSlug } from "./secretReference.ts";
 import { containsSecretReference, SettingsSecretValue } from "./settingsSecretValue.ts";
-import { EnvironmentMachineKind, ThreadEnvMode, WorktreeSubmodules } from "./environment.ts";
+import {
+  EnvironmentMachineKind,
+  ThreadEnvMode,
+  WorktreeLocation,
+  WorktreeSubmodules,
+} from "./environment.ts";
 import { KeybindingShortcut } from "./keybindings.ts";
 import {
   CustomModelSetting,
@@ -1197,6 +1202,7 @@ export const PROJECT_SCOPED_SERVER_SETTING_KEYS = [
   "defaultThreadEnvMode",
   "newWorktreesStartFromOrigin",
   "worktreeSubmodules",
+  "worktreeLocation",
   "defaultAutoPull",
   "defaultProjectScripts",
   "enableAgentBrowserAccess",
@@ -1237,6 +1243,7 @@ export const ProjectSettingsOverrides = Schema.Struct({
   defaultThreadEnvMode: Schema.optionalKey(ThreadEnvMode),
   newWorktreesStartFromOrigin: Schema.optionalKey(Schema.Boolean),
   worktreeSubmodules: ForwardCompatibleOptional(WorktreeSubmodules),
+  worktreeLocation: ForwardCompatibleOptional(WorktreeLocation),
   defaultAutoPull: Schema.optionalKey(Schema.Boolean),
   defaultProjectScripts: Schema.optionalKey(Schema.Array(ProjectScript)),
   enableAgentBrowserAccess: Schema.optionalKey(Schema.Boolean),
@@ -1549,6 +1556,10 @@ export const ServerSettings = Schema.Struct({
   ),
   /** Null inherits t3.json, then recursive; unknown values decode to null for older clients. */
   worktreeSubmodules: ForwardCompatibleNullable(WorktreeSubmodules).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
+  /** Null inherits t3.json, then worktreesDirectory with hashed folder names. */
+  worktreeLocation: ForwardCompatibleNullable(WorktreeLocation).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
   addProjectBaseDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
@@ -1967,6 +1978,7 @@ export const ServerSettingsPatch = Schema.Struct({
   defaultThreadEnvMode: Schema.optionalKey(Schema.NullOr(ThreadEnvMode)),
   newWorktreesStartFromOrigin: Schema.optionalKey(Schema.Boolean),
   worktreeSubmodules: Schema.optionalKey(Schema.NullOr(WorktreeSubmodules)),
+  worktreeLocation: Schema.optionalKey(Schema.NullOr(WorktreeLocation)),
   addProjectBaseDirectory: Schema.optionalKey(TrimmedString),
   ghqCloneLayout: Schema.optionalKey(Schema.Boolean),
   textGenerationModelSelection: Schema.optionalKey(ModelSelectionPatch),

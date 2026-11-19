@@ -6,7 +6,7 @@ import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 
 import * as ProcessRunner from "../processRunner.ts";
-import { makeIsWorktreeContainer } from "./worktreeContainer.ts";
+import { makeReadWorktreeContainer } from "./worktreeContainer.ts";
 
 const git = Effect.fn("worktreeContainerTest.git")(function* (
   cwd: string,
@@ -20,13 +20,15 @@ const git = Effect.fn("worktreeContainerTest.git")(function* (
 });
 
 it.layer(ProcessRunner.layer.pipe(Layer.provideMerge(NodeServices.layer)))(
-  "isWorktreeContainer",
+  "readWorktreeContainer",
   (it) => {
     it.effect("is true only for a folder of worktrees around metadata that is no checkout", () =>
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
-        const isWorktreeContainer = yield* makeIsWorktreeContainer;
+        const readWorktreeContainer = yield* makeReadWorktreeContainer;
+        const isWorktreeContainer = (folder: string) =>
+          Effect.map(readWorktreeContainer(folder), (container) => container !== null);
         const fixture = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-container-test-" });
 
         const source = path.join(fixture, "source");
@@ -54,6 +56,13 @@ it.layer(ProcessRunner.layer.pipe(Layer.provideMerge(NodeServices.layer)))(
 
         const container = yield* makeContainer("container", false);
         assert.isTrue(yield* isWorktreeContainer(container), "container");
+        yield* git(container, "worktree", "add", "-b", "feature", "feature", "develop");
+        const defaultCheckout = (yield* readWorktreeContainer(container))?.defaultCheckout;
+        assert.equal(
+          defaultCheckout && (yield* fileSystem.realPath(defaultCheckout)),
+          yield* fileSystem.realPath(path.join(container, "develop")),
+          "names the checkout of the default branch",
+        );
         assert.isFalse(yield* isWorktreeContainer(path.join(container, "develop")), "its worktree");
 
         const linked = path.join(fixture, "link");

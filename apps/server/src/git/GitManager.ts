@@ -838,20 +838,29 @@ export const make = Effect.gen(function* () {
     Stream.runForEach(() => gitCore.clearWorktreeCheckoutCache),
     Effect.forkScoped,
   );
+  // Null project values defer to the t3.json of the ref being checked out.
+  const readProjectWorktreeSettings = (input: {
+    readonly cwd: string;
+    readonly threadId?: ThreadId | undefined;
+    readonly projectId?: ProjectId | undefined;
+  }) =>
+    projectSettingsFor(input).pipe(
+      Effect.map(({ settings }) => ({
+        submodules: settings.worktreeSubmodules,
+        worktreeLocation: settings.worktreeLocation,
+      })),
+      Effect.orElseSucceed(() => ({ submodules: null, worktreeLocation: null })),
+    );
   const createWorktree: GitManager["Service"]["createWorktree"] = Effect.fn(
     "GitManager.createWorktree",
   )(function* (input, options) {
-    const submodules =
-      options?.submodules !== undefined
-        ? options.submodules
-        : yield* projectSettingsFor(input).pipe(
-            Effect.map(({ settings }) => settings.worktreeSubmodules),
-            Effect.orElseSucceed(() => null),
-          );
+    const projectWorktreeSettings = yield* readProjectWorktreeSettings(input);
     const result = yield* gitCore.createWorktree(input, {
       ...(yield* readWorktreeCreationSettings),
+      ...projectWorktreeSettings,
       ...options,
-      submodules,
+      submodules:
+        options?.submodules !== undefined ? options.submodules : projectWorktreeSettings.submodules,
     });
     if (input.newRefName && input.baseRefName) {
       yield* shareBranchBase(input.cwd, input.newRefName);
@@ -3327,10 +3336,7 @@ export const make = Effect.gen(function* () {
           {
             ...(onWorktreeClaimed ? { progress: { onWorktreeClaimed } } : {}),
             ...(yield* readWorktreeCreationSettings),
-            submodules: yield* projectSettingsFor(input).pipe(
-              Effect.map(({ settings }) => settings.worktreeSubmodules),
-              Effect.orElseSucceed(() => null),
-            ),
+            ...(yield* readProjectWorktreeSettings(input)),
           },
         );
       });

@@ -15,13 +15,18 @@ const parseGitfileTarget = (contents: string): string | undefined => {
 
 const splitNul = (stdout: string) => stdout.split("\0").filter((entry) => entry !== "");
 
+export interface WorktreeContainer {
+  /** The worktree inside the folder with the repository's default branch checked out. */
+  readonly defaultCheckout: string | null;
+}
+
 /**
  * Whether a folder only holds a repository's metadata and worktrees: its `.git` file points at
  * metadata inside it, a linked worktree lives inside it, and either the repository is bare or it
  * has commits but no index. A checkout whose tracked files are all deleted keeps its index, and a
- * fresh one has no commit. Anything this cannot establish answers false.
+ * fresh one has no commit. Anything this cannot establish answers null.
  */
-export const makeIsWorktreeContainer = Effect.gen(function* () {
+export const makeReadWorktreeContainer = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const processRunner = yield* ProcessRunner.ProcessRunner;
@@ -42,17 +47,19 @@ export const makeIsWorktreeContainer = Effect.gen(function* () {
     );
   };
 
-  return Effect.fn("ProjectService.isWorktreeContainer")(function* (workspaceRoot: string) {
+  return Effect.fn("ProjectService.readWorktreeContainer")(function* (
+    workspaceRoot: string,
+  ): Effect.fn.Return<WorktreeContainer | null> {
     // A `.git` directory is an ordinary checkout, so only a gitfile costs any Git process.
     const gitfileTarget = yield* fileSystem.readFileString(path.join(workspaceRoot, ".git")).pipe(
       Effect.map(parseGitfileTarget),
       Effect.orElseSucceed(() => undefined),
     );
-    if (gitfileTarget === undefined) return false;
+    if (gitfileTarget === undefined) return null;
     const root = yield* realPath(workspaceRoot);
     const gitDir = yield* realPath(path.resolve(workspaceRoot, gitfileTarget));
-    if (root._tag === "None" || gitDir._tag === "None") return false;
-    if (!isInside(root.value, gitDir.value)) return false;
+    if (root._tag === "None" || gitDir._tag === "None") return null;
+    if (!isInside(root.value, gitDir.value)) return null;
 
     const git = (args: ReadonlyArray<string>) =>
       processRunner
@@ -69,27 +76,38 @@ export const makeIsWorktreeContainer = Effect.gen(function* () {
 
     // Initializing Git in a bare container clears core.bare, so it is refused while still bare.
     const isBare = yield* git(["rev-parse", "--is-bare-repository"]);
-    if (isBare === null) return false;
+    if (isBare === null) return null;
     if (isBare.trim() !== "true") {
       const hasCommit = yield* git(["rev-parse", "--quiet", "--verify", "HEAD^{commit}"]);
-      if (hasCommit === null) return false;
+      if (hasCommit === null) return null;
       const hasIndex = yield* fileSystem
         .exists(path.join(gitDir.value, "index"))
         .pipe(Effect.orElseSucceed(() => true));
-      if (hasIndex) return false;
+      if (hasIndex) return null;
     }
 
     const worktrees = yield* git(["worktree", "list", "--porcelain", "-z"]);
-    if (worktrees === null) return false;
-    // The first entry is the main worktree, which Git reports as the metadata directory here.
-    const linkedWorktreePaths = splitNul(worktrees)
-      .filter((field) => field.startsWith("worktree "))
-      .slice(1)
-      .map((field) => field.slice("worktree ".length));
-    for (const worktreePath of linkedWorktreePaths) {
-      const worktree = yield* realPath(worktreePath);
-      if (worktree._tag === "Some" && isInside(root.value, worktree.value)) return true;
+    if (worktrees === null) return null;
+    // Records start at "worktree <path>"; the first is the main worktree, which Git reports as
+    // the metadata directory here.
+    const linkedWorktrees: Array<{ path: string; branch: string | null }> = [];
+    for (const field of splitNul(worktrees)) {
+      if (field.startsWith("worktree ")) {
+        linkedWorktrees.push({ path: field.slice("worktree ".length), branch: null });
+      } else if (field.startsWith("branch ") && linkedWorktrees.length > 0) {
+        linkedWorktrees[linkedWorktrees.length - 1]!.branch = field.slice("branch ".length);
+      }
     }
-    return false;
+    const inside: Array<{ path: string; branch: string | null }> = [];
+    for (const entry of linkedWorktrees.slice(1)) {
+      const worktree = yield* realPath(entry.path);
+      if (worktree._tag === "Some" && isInside(root.value, worktree.value)) inside.push(entry);
+    }
+    if (inside.length === 0) return null;
+    const head = yield* git(["symbolic-ref", "--quiet", "HEAD"]);
+    const defaultBranch = head?.trim() ?? null;
+    return {
+      defaultCheckout: inside.find((entry) => entry.branch === defaultBranch)?.path ?? null,
+    };
   });
 });

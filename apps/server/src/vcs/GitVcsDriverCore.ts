@@ -28,6 +28,7 @@ import {
   GitCommandError,
   type GitCommandFailureReason,
   T3_PROJECT_FILE_NAME,
+  type T3ProjectFile,
   type ReviewBranchCommitsInput,
   type ReviewDiffChangeType,
   type ReviewDiffFileContentsInput,
@@ -54,7 +55,12 @@ import {
 } from "./VcsProcess.ts";
 import { makeWorktreeCheckoutCache } from "./worktreeCheckoutCache.ts";
 import { removeLinkedWorktree } from "./worktreeRemoval.ts";
-import { resolveWorktreesDirectory } from "../worktreesDirectory.ts";
+import {
+  branchFolderName,
+  createdWorktreeRecordPath,
+  resolveProjectWorktreesDirectory,
+  resolveWorktreesDirectory,
+} from "../worktreesDirectory.ts";
 import {
   parseRemoteNames,
   parseRemoteNamesInGitOrder,
@@ -1017,7 +1023,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const commandSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  const { worktreesDir, worktreeCheckoutCacheDir } = yield* ServerConfig.ServerConfig;
+  const { worktreesDir, worktreeCheckoutCacheDir, stateDir } = yield* ServerConfig.ServerConfig;
   const isServerInternalPath = yield* makeIsServerInternalPath;
   const digest = yield* Digest.Digest;
   const random = yield* SecureRandom.SecureRandom;
@@ -5031,12 +5037,14 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
   );
 
   // A new worktree has no files yet, so t3.json and its pattern file come from the ref itself.
-  const readWorktreeSparsePatterns = Effect.fn("readWorktreeSparsePatterns")(function* (
+  // `git show` does not read a lone - as the previous checkout either.
+  const showableRef = (refName: string) => (refName === "-" ? "@{-1}" : refName);
+
+  const readWorktreeProjectFile = Effect.fn("readWorktreeProjectFile")(function* (
     cwd: string,
     refName: string,
   ) {
-    // `git show` does not read a lone - as the previous checkout either.
-    const ref = refName === "-" ? "@{-1}" : refName;
+    const ref = showableRef(refName);
     const projectFile = yield* executeGit(
       "GitVcsDriver.createWorktree.readProjectFile",
       cwd,
@@ -5046,10 +5054,21 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     if (projectFile.exitCode !== 0) return null;
     const file = parseT3ProjectFile(projectFile.stdout);
     if (file === null) {
-      yield* Effect.logWarning("t3.json is invalid; checking out the full worktree", { cwd, ref });
-      return null;
+      yield* Effect.logWarning("t3.json is invalid; creating the worktree with defaults", {
+        cwd,
+        ref,
+      });
     }
-    if (file.worktreeSparsePatternsPath === undefined) return null;
+    return file;
+  });
+
+  const readWorktreeSparsePatterns = Effect.fn("readWorktreeSparsePatterns")(function* (
+    cwd: string,
+    refName: string,
+    file: T3ProjectFile | null,
+  ) {
+    const ref = showableRef(refName);
+    if (file?.worktreeSparsePatternsPath === undefined) return null;
     // Git reads <ref>:./path from the working directory, so keep the path repository-relative.
     const patternsPath = file.worktreeSparsePatternsPath.replace(/^(?:\.\/)+/, "");
     const patterns = patternsPath.split("/").includes("..")
@@ -5151,39 +5170,75 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     }
   });
 
+  // A bare repository's checkouts are all linked worktrees, so name it after its Git directory,
+  // or the folder around a hidden one like <container>/.bare, instead of whichever was opened.
+  const repositoryFolderName = (cwd: string, commonDir: string | null) => {
+    if (commonDir === null || path.basename(commonDir) === ".git") {
+      // Resolve sub/.. before taking the basename.
+      return path.basename(path.resolve(cwd));
+    }
+    const name = path.basename(commonDir).replace(/\.git$/, "");
+    return name === "" || name.startsWith(".") ? path.basename(path.dirname(commonDir)) : name;
+  };
+
   const createWorktree: GitVcsDriver.GitVcsDriver["Service"]["createWorktree"] = Effect.fn(
     "createWorktree",
   )(function* (input, options) {
     yield* refuseOptionLikeRefName("GitVcsDriver.createWorktree", input.cwd, input.refName);
     yield* refuseOptionLikeRefName("GitVcsDriver.createWorktree", input.cwd, input.newRefName);
     const targetBranch = input.newRefName ?? input.refName;
-    // Resolve sub/.. before taking the basename.
-    const repoName = path.basename(path.resolve(input.cwd));
+    // Read before the branch exists, so a missing pattern file leaves nothing behind.
+    const projectFile = yield* readWorktreeProjectFile(input.cwd, input.refName);
     let worktreePath = input.path;
+    const placedByT3 = worktreePath == null;
     if (worktreePath == null) {
-      const parentDir = resolveWorktreesDirectory(
-        options?.worktreesDirectory ?? "",
-        worktreesDir,
-        path,
-        yield* HostProcess.HomeDirectory,
+      const commonDir = yield* readGitCommonDir(input.cwd);
+      const home = yield* HostProcess.HomeDirectory;
+      const location = resolveProjectFileBackedSetting(
+        "worktreeLocation",
+        options?.worktreeLocation ?? null,
+        projectFile,
       );
+      const environmentRoot =
+        location.value.directory === ""
+          ? resolveWorktreesDirectory(options?.worktreesDirectory ?? "", worktreesDir, path, home)
+          : null;
+      const parentDir =
+        location.value.directory === ""
+          ? environmentRoot &&
+            path.join(environmentRoot, repositoryFolderName(input.cwd, commonDir))
+          : resolveProjectWorktreesDirectory(
+              location.value.directory,
+              commonDir === null ? path.resolve(input.cwd) : path.dirname(commonDir),
+              path,
+              home,
+            );
       if (parentDir === null) {
         return yield* new GitCommandError({
           operation: "GitVcsDriver.createWorktree",
           command: "git worktree add",
           cwd: input.cwd,
-          detail: `The worktree location "${options?.worktreesDirectory}" must be an absolute folder on this machine, not a drive root. Change it in Settings → Worktrees.`,
+          detail:
+            location.value.directory === ""
+              ? `The worktree location "${options?.worktreesDirectory}" must be an absolute folder on this machine, not a drive root. Change it in Settings → Worktrees.`
+              : `The worktree location "${location.value.directory}" must be a folder on this machine, not a drive root. Change it in the project's Worktrees settings${location.source === "t3.json" ? " or in t3.json" : ""}.`,
         });
       }
-      const identity = `${yield* readGitCommonDir(input.cwd)}\0${targetBranch}`;
-      const hash = yield* digest.digest(Digest.sha256, new TextEncoder().encode(identity));
-      // UTF-8 bytes bound UTF-16 length too, leaving room for files on Windows.
-      let prefix = "";
-      for (const character of targetBranch.replace(/\//g, "-")) {
-        if (Buffer.byteLength(prefix + character) > 23) break;
-        prefix += character;
+      let folderName: string;
+      if (location.value.naming === "branch") {
+        folderName = branchFolderName(targetBranch);
+      } else {
+        const identity = `${commonDir}\0${targetBranch}`;
+        const hash = yield* digest.digest(Digest.sha256, new TextEncoder().encode(identity));
+        // UTF-8 bytes bound UTF-16 length too, leaving room for files on Windows.
+        let prefix = "";
+        for (const character of targetBranch.replace(/\//g, "-")) {
+          if (Buffer.byteLength(prefix + character) > 23) break;
+          prefix += character;
+        }
+        folderName = `${prefix}-${Hex.encode(hash).slice(0, 16)}`;
       }
-      const basePath = path.join(parentDir, repoName, `${prefix}-${Hex.encode(hash).slice(0, 16)}`);
+      const basePath = path.join(parentDir, folderName);
       // The name is stable per branch, so a folder left by an earlier worktree must not block it.
       worktreePath = basePath;
       for (
@@ -5196,8 +5251,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     }
     // Later steps run git inside the worktree, so resolve a relative path the way worktree add does.
     worktreePath = path.resolve(input.cwd, worktreePath);
-    // Read before the branch exists, so a missing pattern file leaves nothing behind.
-    const sparsePatterns = yield* readWorktreeSparsePatterns(input.cwd, input.refName);
+    const sparsePatterns = yield* readWorktreeSparsePatterns(input.cwd, input.refName, projectFile);
     const newRefName = input.newRefName;
     // Older Git still creates worktrees normally, but cannot prove ownership for cancellation.
     const addHelp = newRefName
@@ -5372,6 +5426,17 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
           : Effect.void,
       ),
     );
+
+    if (placedByT3) {
+      const record = createdWorktreeRecordPath(stateDir, worktreePath, path);
+      yield* fileSystem.makeDirectory(path.dirname(record), { recursive: true }).pipe(
+        Effect.andThen(fileSystem.writeFileString(record, `${worktreePath}\n`)),
+        // Without the record the worktree is only kept longer, never removed or recreated.
+        Effect.catch((cause) =>
+          Effect.logWarning("could not record a created worktree", { worktreePath, cause }),
+        ),
+      );
+    }
 
     // worktree add leaves submodules empty, potentially omitting project skills, tools or source.
     // Ask HEAD, because sparse patterns can leave .gitmodules out of the working tree.

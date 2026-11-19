@@ -43,6 +43,7 @@ import {
 } from "@t3tools/contracts";
 import { symlinksSupported } from "@t3tools/shared/testing/symlinks";
 import * as ServerConfig from "../config.ts";
+import { createdWorktreeRecordPath } from "../worktreesDirectory.ts";
 import {
   isNonRepositoryGitStderr,
   makeGitVcsDriverCore,
@@ -7129,6 +7130,100 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
           )
           .pipe(Effect.flip);
         assert.match(rootError.detail, /not a drive root/);
+      }),
+    );
+
+    it.effect("places worktrees in a project folder beside a bare repository's checkouts", () =>
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const pathService = yield* Path.Path;
+        const { stateDir } = yield* ServerConfig.ServerConfig;
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+        const source = yield* makeTmpDir();
+        const { initialBranch } = yield* initRepoWithCommit(source);
+        yield* writeTextFile(
+          source,
+          "t3.json",
+          JSON.stringify({ worktreeLocation: { directory: ".", naming: "branch" } }),
+        );
+        yield* git(source, ["add", "t3.json"]);
+        yield* git(source, ["commit", "-m", "worktree location"]);
+        const container = pathService.join(yield* makeTmpDir(), "sazzi");
+        yield* git(source, ["clone", "--bare", source, pathService.join(container, ".bare")]);
+        yield* fileSystem.writeFileString(pathService.join(container, ".git"), "gitdir: ./.bare\n");
+        const checkout = pathService.join(container, initialBranch);
+        yield* git(container, ["worktree", "add", checkout, initialBranch]);
+        const userFolder = pathService.join(container, "feature-taken");
+        yield* fileSystem.makeDirectory(userFolder);
+        yield* fileSystem.writeFileString(pathService.join(userFolder, "notes.txt"), "mine");
+        const realContainer = yield* fileSystem.realPath(container);
+        const handMade = pathService.join(container, "hand-made");
+        yield* git(container, ["worktree", "add", "-b", "hand-made", handMade, initialBranch]);
+        const refs = yield* driver.listRefs({ cwd: checkout, refKind: "local" });
+        assert.equal(
+          refs.refs.find((ref) => ref.name === "hand-made")?.worktreePath,
+          pathService.join(realContainer, "hand-made"),
+        );
+
+        const fromProjectFile = yield* driver.createWorktree({
+          cwd: checkout,
+          path: null,
+          refName: initialBranch,
+          newRefName: "feature/taken",
+        });
+        assert.equal(
+          yield* fileSystem.realPath(fromProjectFile.worktree.path),
+          pathService.join(realContainer, "feature-taken-2"),
+        );
+        assert.deepEqual(yield* fileSystem.readDirectory(userFolder), ["notes.txt"]);
+        assert.isTrue(
+          yield* fileSystem.exists(
+            createdWorktreeRecordPath(stateDir, fromProjectFile.worktree.path, pathService),
+          ),
+        );
+        assert.isFalse(
+          yield* fileSystem.exists(createdWorktreeRecordPath(stateDir, checkout, pathService)),
+        );
+
+        const elsewhere = yield* makeTmpDir();
+        const fromSetting = yield* driver.createWorktree(
+          { cwd: checkout, path: null, refName: initialBranch, newRefName: "feature/setting" },
+          { worktreeLocation: { directory: elsewhere, naming: "hashed" } },
+        );
+        assert.equal(pathService.dirname(fromSetting.worktree.path), elsewhere);
+        assert.match(
+          pathService.basename(fromSetting.worktree.path),
+          /^feature-setting-[0-9a-f]{16}$/,
+        );
+
+        const worktreesDirectory = yield* makeTmpDir();
+        const inEnvironmentFolder = yield* driver.createWorktree(
+          { cwd: checkout, path: null, refName: initialBranch, newRefName: "feature/env" },
+          { worktreesDirectory, worktreeLocation: { directory: "", naming: "branch" } },
+        );
+        assert.equal(
+          inEnvironmentFolder.worktree.path,
+          pathService.join(worktreesDirectory, "sazzi", "feature-env"),
+        );
+
+        const explicit = pathService.join(elsewhere, "explicit");
+        yield* driver.createWorktree({
+          cwd: checkout,
+          path: explicit,
+          refName: initialBranch,
+          newRefName: "feature/explicit",
+        });
+        assert.isFalse(
+          yield* fileSystem.exists(createdWorktreeRecordPath(stateDir, explicit, pathService)),
+        );
+
+        const rootError = yield* driver
+          .createWorktree(
+            { cwd: checkout, path: null, refName: initialBranch, newRefName: "feature/root" },
+            { worktreeLocation: { directory: "/", naming: "branch" } },
+          )
+          .pipe(Effect.flip);
+        assert.match(rootError.detail, /project's Worktrees settings/);
       }),
     );
 

@@ -7,6 +7,7 @@ import {
   ProjectId,
   ThreadId,
   TrimmedNonEmptyString,
+  TrimmedString,
 } from "./baseSchemas.ts";
 import { SourceControlProviderKind } from "./sourceControl.ts";
 
@@ -56,6 +57,16 @@ export type ThreadEnvMode = typeof ThreadEnvMode.Type;
 
 export const WorktreeSubmodules = Schema.Literals(["recursive", "top-level", "none"]);
 export type WorktreeSubmodules = typeof WorktreeSubmodules.Type;
+
+export const WorktreeFolderNaming = Schema.Literals(["hashed", "branch"]);
+export type WorktreeFolderNaming = typeof WorktreeFolderNaming.Type;
+
+/** An empty directory means the environment's worktree folder, inside a folder named for the repository. */
+export const WorktreeLocation = Schema.Struct({
+  directory: TrimmedString,
+  naming: WorktreeFolderNaming,
+});
+export type WorktreeLocation = typeof WorktreeLocation.Type;
 export type ExecutionEnvironmentPlatform = typeof ExecutionEnvironmentPlatform.Type;
 
 export const ServerSelfUpdateMethod = Schema.Literals(["boot-service", "respawn", "desktop-app"]);

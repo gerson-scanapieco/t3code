@@ -56,7 +56,11 @@ import * as WorktreeBranchSync from "./orchestration-v2/WorktreeBranchSync.ts";
 import { forkParked } from "./serverActivation.ts";
 import * as Settings from "./serverSettings.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
-import { isFilesystemRoot, managedWorktreesDirectories } from "./worktreesDirectory.ts";
+import {
+  isFilesystemRoot,
+  makeIsCreatedWorktree,
+  managedWorktreesDirectories,
+} from "./worktreesDirectory.ts";
 import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
 import { isNonRepositoryGitStderr } from "./vcs/GitVcsDriverCore.ts";
 import { isLinkedWorktree, removeLinkedWorktree } from "./vcs/worktreeRemoval.ts";
@@ -333,6 +337,7 @@ const make = Effect.gen(function* () {
   const terminals = yield* TerminalManager.TerminalManager;
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+  const isCreatedWorktree = yield* makeIsCreatedWorktree;
   const liveTerminals = new Map<string, Map<string, TerminalSummary>>();
   const orphanSizes = new Map<string, number | null>();
   const noteTerminal = (terminal: TerminalSummary) => {
@@ -827,16 +832,29 @@ const make = Effect.gen(function* () {
   // A worktree can outlive its project moving to another clone. Git removes a
   // worktree through the repository that registered it, not through the
   // project's current checkout, so resolve the owning repository first.
-  const worktreeRepository = Effect.fn("StorageCleanup.worktreeRepository")(function* (
-    worktreePath: string,
-  ) {
+  const realCommonDir = Effect.fnUntraced(function* (cwd: string) {
     const commonDir = yield* git.execute({
       operation: "StorageCleanup.worktreeRepository",
-      cwd: worktreePath,
+      cwd,
       args: ["rev-parse", "--git-common-dir"],
     });
-    const resolved = path.resolve(worktreePath, commonDir.stdout.trim());
-    return path.basename(resolved) === ".git" ? path.dirname(resolved) : resolved;
+    const resolved = path.resolve(cwd, commonDir.stdout.trim());
+    return yield* fs.realPath(resolved).pipe(Effect.orElseSucceed(() => resolved));
+  });
+  const worktreeRepository = Effect.fn("StorageCleanup.worktreeRepository")(function* (
+    worktreePath: string,
+    projectRoot: string,
+  ) {
+    const commonDir = yield* realCommonDir(worktreePath);
+    if (path.basename(commonDir) === ".git") return path.dirname(commonDir);
+    // T3 runs Git with safe.bareRepository=explicit, so a bare repository is reached through a
+    // checkout of its own, such as the project's.
+    const projectCommonDir = yield* realCommonDir(projectRoot).pipe(
+      Effect.orElseSucceed(() => null),
+    );
+    return projectCommonDir !== null && pathKey(projectCommonDir) === pathKey(commonDir)
+      ? projectRoot
+      : commonDir;
   });
 
   const localChangesReason = Effect.fn("StorageCleanup.localChangesReason")(function* (
@@ -1084,7 +1102,11 @@ const make = Effect.gen(function* () {
       const realParent = yield* fs.realPath(path.dirname(worktreePath));
       if (realPath !== path.join(realParent, path.basename(worktreePath)))
         return "worktree is a symbolic link";
-      if (!roots.some((root) => inside(root, realPath)))
+      // Project folders can hold the user's own checkouts, so only recorded ones count there.
+      if (
+        !roots.some((root) => inside(root, realPath)) &&
+        !(yield* isCreatedWorktree(worktreePath))
+      )
         return "outside the managed worktree folder";
       const linked = yield* isLinkedWorktree(worktreePath).pipe(
         Effect.catchReason("PlatformError", "NotFound", () => Effect.succeed(false)),
@@ -1567,7 +1589,10 @@ const make = Effect.gen(function* () {
               const changes = yield* localChangesReason(worktreePath, settings);
               if (changes !== null) return keep(changes);
             }
-            const repository = yield* worktreeRepository(worktreePath);
+            const repository = yield* worktreeRepository(
+              worktreePath,
+              path.resolve(project.workspaceRoot),
+            );
             const deleteScriptFailure = yield* projectScripts
               .runOnWorktreeDelete({
                 threadId: thread.id,

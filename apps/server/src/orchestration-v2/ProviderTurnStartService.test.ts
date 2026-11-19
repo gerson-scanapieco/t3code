@@ -37,6 +37,8 @@ import * as FileSystem from "effect/FileSystem";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+// @effect-diagnostics-next-line nodeBuiltinImport:off -- The mock filesystem keys records by POSIX path.
+import * as NodePath from "node:path";
 import * as Path from "effect/Path";
 import * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
@@ -44,6 +46,7 @@ import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 
 import * as ServerConfig from "../config.ts";
+import { createdWorktreeRecordPath } from "../worktreesDirectory.ts";
 import * as McpAppModelContext from "../mcpApps/McpAppModelContext.ts";
 import * as PreviewAgentActivity from "../preview/PreviewAgentActivity.ts";
 import * as CheckpointService from "./CheckpointService.ts";
@@ -89,6 +92,7 @@ import * as TurnItemPositionStore from "./TurnItemPositionStore.ts";
 const isDomainEvent = Schema.is(OrchestrationV2DomainEvent);
 
 const managedWorktreesDir = "/tmp/provider-turn-start-worktrees";
+const stateDir = "/tmp/provider-turn-start-state";
 // fs.realpath applies `..` and `.` before following symlinks.
 const normalize = (target: string) => {
   const parts: Array<string> = [];
@@ -101,7 +105,10 @@ const normalize = (target: string) => {
 const layerWorktreeLocation = (worktreesDir = managedWorktreesDir) =>
   Layer.mergeAll(
     Path.layer,
-    Layer.mock(ServerConfig.ServerConfig)({ worktreesDir } as ServerConfig.ServerConfig["Service"]),
+    Layer.mock(ServerConfig.ServerConfig)({
+      worktreesDir,
+      stateDir,
+    } as ServerConfig.ServerConfig["Service"]),
     ServerSettings.layerTest(),
   );
 
@@ -111,7 +118,11 @@ function startWithMissingWorktree(
     [managedWorktreesDir]: managedWorktreesDir,
     [`${managedWorktreesDir}/project`]: `${managedWorktreesDir}/project`,
   },
+  recordedPaths: ReadonlyArray<string> = [],
 ) {
+  const records = new Set(
+    recordedPaths.map((recorded) => createdWorktreeRecordPath(stateDir, recorded, NodePath.posix)),
+  );
   const threadId = ThreadId.make("thread_provider_turn_start_projection_failure");
   const runId = RunId.make("run_provider_turn_start_projection_failure");
   const attemptId = RunAttemptId.make("attempt_provider_turn_start_projection_failure");
@@ -170,7 +181,7 @@ function startWithMissingWorktree(
         IdAllocator.layer,
         Layer.mock(TurnItemPositionStore.TurnItemPositionStoreV2)({}),
         Layer.succeed(FileSystem.FileSystem, {
-          exists: () => Effect.succeed(false),
+          exists: (target: string) => Effect.succeed(records.has(target)),
           realPath: (target: string) =>
             normalize(target) in realPaths
               ? Effect.succeed(realPaths[normalize(target)])
@@ -293,8 +304,24 @@ it.each([
     recreated: false,
   },
   { label: "a relative path", worktreePath: "project/feature-restore", recreated: false },
+  {
+    label: "a project folder path T3 recorded creating",
+    worktreePath: "/tmp/provider-turn-start-container/feature-restore",
+    recordedPaths: ["/tmp/provider-turn-start-container/feature-restore"],
+    recreated: true,
+  },
+  {
+    label: "a project folder path T3 did not create",
+    worktreePath: "/tmp/provider-turn-start-container/main",
+    recordedPaths: ["/tmp/provider-turn-start-container/feature-restore"],
+    recreated: false,
+  },
 ])("recreates a missing worktree only at the managed location: $label", async (input) => {
-  const harness = startWithMissingWorktree(input.worktreePath, input.realPaths);
+  const harness = startWithMissingWorktree(
+    input.worktreePath,
+    input.realPaths,
+    input.recordedPaths,
+  );
   await harness.start;
   expect(harness.createWorktree).toHaveBeenCalledTimes(input.recreated ? 1 : 0);
 });

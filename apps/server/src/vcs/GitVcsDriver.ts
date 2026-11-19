@@ -36,6 +36,7 @@ import {
   type VcsRemoveWorktreeInput,
   type VcsStatusInput,
   type VcsStatusResult,
+  type WorktreeLocation,
   type WorktreeSubmodules,
 } from "@t3tools/contracts";
 import { isMissingExecutable } from "@t3tools/source-control-core/server/discovery";
@@ -152,6 +153,8 @@ export interface CreateWorktreeOptions {
   /** Null or omitted defers to the checkout's t3.json. */
   readonly submodules?: WorktreeSubmodules | null;
   readonly worktreesDirectory?: string;
+  /** Null or omitted defers to t3.json. Only applies when the caller leaves the path to T3. */
+  readonly worktreeLocation?: WorktreeLocation | null;
   /** Clone the checkout from the macOS worktree checkout cache. */
   readonly fastCheckout?: boolean;
 }
