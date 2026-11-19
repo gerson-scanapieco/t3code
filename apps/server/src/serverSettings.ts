@@ -74,6 +74,7 @@ import {
 export {
   resolveReviewGuideModelSelection,
   resolveSourceControlWriterModelSelection,
+  resolveThreadSummaryModelSelection,
 } from "@t3tools/shared/serverSettings";
 
 const encodeServerSettings = Schema.encodeEffect(ServerSettings);

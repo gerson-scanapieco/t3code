@@ -161,6 +161,20 @@ export function resolveReviewGuideModelSelection(
     : resolveSourceControlWriterModelSelection(settings, providers, projectId);
 }
 
+/** Thread summaries follow the text generation model unless their own usable model is set. */
+export function resolveThreadSummaryModelSelection(
+  settings: ServerSettings,
+  providers: ReadonlyArray<ServerProvider> | undefined,
+  projectId: ProjectId | null,
+): ModelSelection {
+  const selection = settings.threadSummaryModelSelection;
+  return selection &&
+    resolveTextGenerationSelectionEnabled(settings, projectId, selection.instanceId) &&
+    isTextGenerationTargetUsable(settings, providers, selection.instanceId)
+    ? selection
+    : settings.textGenerationModelSelection;
+}
+
 /** Transcript cleanup follows the text generation model unless its own usable model is set. */
 export function resolveSpeechPostProcessingModelSelection(
   settings: ServerSettings,
@@ -647,6 +661,9 @@ export function applyServerSettingsPatch(
       : {}),
     ...(patch.reviewGuideModelSelection !== undefined
       ? { reviewGuideModelSelection: patch.reviewGuideModelSelection }
+      : {}),
+    ...(patch.threadSummaryModelSelection !== undefined
+      ? { threadSummaryModelSelection: patch.threadSummaryModelSelection }
       : {}),
     ...(automaticGitFetchInterval !== undefined ? { automaticGitFetchInterval } : {}),
     ...(providerHealthRefreshInterval !== undefined ? { providerHealthRefreshInterval } : {}),

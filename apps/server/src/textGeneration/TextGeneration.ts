@@ -31,6 +31,8 @@ export type {
   PrContentGenerationResult,
   ReviewGuideGenerationInput,
   ReviewGuideGenerationResult,
+  ThreadSummaryGenerationInput,
+  ThreadSummaryGenerationResult,
   ThreadTitleGenerationInput,
   ThreadTitleGenerationResult,
   TranscriptionPostProcessingInput,
@@ -46,6 +48,7 @@ type TextGenerationOp =
   | "generatePrContent"
   | "generateBranchName"
   | "generateThreadTitle"
+  | "generateThreadSummary"
   | "generateReviewGuide"
   | "generateTranscriptionPostProcessing";
 
@@ -182,6 +185,14 @@ export const make = Effect.gen(function* () {
         input.modelSelection,
         input.projectId,
         (service, modelSelection) => service.generateBranchName({ ...input, modelSelection }),
+      );
+    }),
+    generateThreadSummary: Effect.fn("TextGeneration.generateThreadSummary")(function (input) {
+      return generate(
+        "generateThreadSummary",
+        input.modelSelection,
+        input.projectId,
+        (service, modelSelection) => service.generateThreadSummary({ ...input, modelSelection }),
       );
     }),
     generateReviewGuide: Effect.fn("TextGeneration.generateReviewGuide")(function (input) {

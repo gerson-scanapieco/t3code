@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { buildThreadTitlePrompt } from "./textGenerationPrompts.ts";
+import { buildThreadSummaryPrompt, buildThreadTitlePrompt } from "./textGenerationPrompts.ts";
 import { normalizeCliError } from "./textGenerationUtils.ts";
 
 describe("normalizeCliError", () => {
@@ -33,5 +33,21 @@ describe("buildThreadTitlePrompt", () => {
     expect(buildThreadTitlePrompt({ message: "Fix login", instructions: " " }).prompt).toContain(
       "3-8 words, fewer than 40 characters.",
     );
+  });
+});
+
+describe("buildThreadSummaryPrompt", () => {
+  it("lets the user's instructions replace the length cap and bounds the transcript", () => {
+    const input = { threadTitle: "Login Flake", transcript: `USER:\n${"x".repeat(50_000)}` };
+    const plain = buildThreadSummaryPrompt(input).prompt;
+    expect(plain).toContain("under 120 words");
+    expect(plain.length).toBeLessThan(30_000);
+
+    const custom = buildThreadSummaryPrompt({
+      ...input,
+      instructions: "One sentence only.",
+    }).prompt;
+    expect(custom).not.toContain("under 120 words");
+    expect(custom).toContain("Summary instructions from the user:\nOne sentence only.");
   });
 });

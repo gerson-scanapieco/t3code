@@ -202,6 +202,12 @@ import {
 } from "./guestShare.ts";
 import { PullRequestReviewGuideResult } from "./pullRequestReviewGuide.ts";
 import {
+  ThreadSummary,
+  ThreadSummaryError,
+  ThreadSummaryInput,
+  ThreadSummaryResult,
+} from "./threadSummary.ts";
+import {
   PullRequestActionInput,
   PullRequestActivity,
   PullRequestChangeBreakdown,
@@ -455,6 +461,9 @@ export const WS_METHODS = {
   projectsEnsureScratch: "projects.ensureScratch",
   projectsCreateNew: "projects.createNew",
   projectsCreateFromThread: "projects.createFromThread",
+
+  threadsSummary: "threads.summary",
+  threadsGenerateSummary: "threads.generateSummary",
 
   shellOpenInEditor: "shell.openInEditor",
 
@@ -1581,6 +1590,18 @@ const WsProjectsCreateFromThreadRpc = Rpc.make(WS_METHODS.projectsCreateFromThre
   error: Schema.Union([OrchestrationDispatchCommandError, EnvironmentAuthorizationError]),
 });
 
+const WsThreadsSummaryRpc = Rpc.make(WS_METHODS.threadsSummary, {
+  payload: ThreadSummaryInput,
+  success: ThreadSummaryResult,
+  error: Schema.Union([ThreadSummaryError, EnvironmentAuthorizationError]),
+});
+
+const WsThreadsGenerateSummaryRpc = Rpc.make(WS_METHODS.threadsGenerateSummary, {
+  payload: ThreadSummaryInput,
+  success: ThreadSummary,
+  error: Schema.Union([ThreadSummaryError, EnvironmentAuthorizationError]),
+});
+
 const WsShellOpenInEditorRpc = Rpc.make(WS_METHODS.shellOpenInEditor, {
   payload: LaunchEditorInput,
   error: Schema.Union([ExternalLauncherError, EnvironmentAuthorizationError]),
@@ -2413,6 +2434,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsEnsureScratchRpc,
   WsProjectsCreateNewRpc,
   WsProjectsCreateFromThreadRpc,
+  WsThreadsSummaryRpc,
+  WsThreadsGenerateSummaryRpc,
   WsProjectsWriteFileRpc,
   WsProjectsMutateRpc,
   WsShellOpenInEditorRpc,
