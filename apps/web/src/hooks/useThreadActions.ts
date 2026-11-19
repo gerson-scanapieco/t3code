@@ -13,6 +13,7 @@ import {
   AuthSourceControlWriteScope,
   EnvironmentAuthorizationError,
   EnvironmentId,
+  GitCommandError,
   type ScopedThreadRef,
   ThreadId,
   sessionGrantsScope,
@@ -64,6 +65,8 @@ import { showThreadUndoNotice } from "./showThreadUndoNotice";
 import { useAtomCommand } from "../state/use-atom-command";
 import { useOrchestrationCommand } from "../state/use-orchestration-command";
 import { useAtomQueryRunner } from "../state/use-atom-query-runner";
+
+const isGitCommandError = Schema.is(GitCommandError);
 
 export class ThreadArchiveBlockedError extends Schema.TaggedError<ThreadArchiveBlockedError>()(
   "ThreadArchiveBlockedError",
@@ -708,7 +711,9 @@ export function useThreadActions() {
     if (cleanupFailure) {
       const removalFailed = removeResult._tag === "Failure";
       const error = squashAtomCommandFailure(cleanupFailure);
-      const message = thrownErrorMessage(error, m) ?? m(msg("An error occurred."));
+      const message = isGitCommandError(error)
+        ? error.detail
+        : (thrownErrorMessage(error, m) ?? m(msg("An error occurred.")));
       console.error("Worktree cleanup failed after thread deletion", {
         threadId: threadRef.threadId,
         projectCwd: threadProject.workspaceRoot,

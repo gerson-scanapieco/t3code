@@ -431,12 +431,7 @@ describe("worktree delete script", () => {
           projectCwd: projectRoot,
           worktreePath,
         });
-        assert.deepEqual(result, {
-          status: "finished",
-          scriptName: "Teardown",
-          exitCode: 0,
-          timedOut: false,
-        });
+        assert.deepEqual(result, { status: "finished", scriptName: "Teardown" });
         assert.equal(
           yield* fileSystem.readFileString(`${worktreePath}/seen`),
           `${worktreePath}|${worktreePath}|${projectRoot}`,
@@ -444,18 +439,16 @@ describe("worktree delete script", () => {
       }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 
-  it.live("reports a failing script without failing", () =>
+  it.live("fails with the exit code and output of a failing script", () =>
     Effect.gen(function* () {
       const { runner, worktreePath, projectRoot } = yield* makeDeleteHarness({
-        command: "exit 3",
+        command: "echo stack still up; exit 3",
       });
-      const result = yield* runner.runOnWorktreeDelete({ projectCwd: projectRoot, worktreePath });
-      assert.deepEqual(result, {
-        status: "finished",
-        scriptName: "Teardown",
-        exitCode: 3,
-        timedOut: false,
-      });
+      const error = yield* runner
+        .runOnWorktreeDelete({ projectCwd: projectRoot, worktreePath })
+        .pipe(Effect.flip);
+      assert.deepInclude(error, { scriptName: "Teardown", exitCode: 3, timedOut: false });
+      assert.equal(error.message, 'Delete action "Teardown" exited with code 3: stack still up.');
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 
@@ -497,12 +490,8 @@ describe("worktree delete script", () => {
         .pipe(Effect.forkChild);
       yield* Deferred.await(spawned);
       yield* TestClock.adjust(ProjectSetupScriptRunner.WORKTREE_DELETE_SCRIPT_TIMEOUT);
-      assert.deepEqual(yield* Fiber.join(run), {
-        status: "finished",
-        scriptName: "Teardown",
-        exitCode: null,
-        timedOut: true,
-      });
+      const error = yield* Fiber.join(run).pipe(Effect.flip);
+      assert.deepInclude(error, { scriptName: "Teardown", exitCode: null, timedOut: true });
       yield* Deferred.await(killed);
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
