@@ -1568,12 +1568,18 @@ const make = Effect.gen(function* () {
               if (changes !== null) return keep(changes);
             }
             const repository = yield* worktreeRepository(worktreePath);
-            yield* projectScripts.runOnWorktreeDelete({
-              threadId: thread.id,
-              projectId: thread.projectId,
-              projectCwd: project.workspaceRoot,
-              worktreePath,
-            });
+            const deleteScriptFailure = yield* projectScripts
+              .runOnWorktreeDelete({
+                threadId: thread.id,
+                projectId: thread.projectId,
+                projectCwd: project.workspaceRoot,
+                worktreePath,
+              })
+              .pipe(
+                Effect.as(null),
+                Effect.catch((error) => Effect.succeed(error.message)),
+              );
+            if (deleteScriptFailure !== null) return keep(deleteScriptFailure);
             // Forced removal already discards local files; do not widen its final-check window.
             if (settings.worktreeKeepWhen === "tracked-changes" && !submodules.force)
               yield* cleanupGit(worktreePath, ["clean", "-ffdx"], "git clean");

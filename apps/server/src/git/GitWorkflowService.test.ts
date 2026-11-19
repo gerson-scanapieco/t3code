@@ -113,4 +113,52 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("GitWorkflowServi
       ),
     );
   });
+  it.effect("keeps the worktree when the project's delete script fails", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const root = yield* fileSystem.realPath(
+        yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-remove-worktree-" }),
+      );
+      const cwd = `${root}/repo`;
+      const worktreePath = `${root}/feature`;
+      yield* fileSystem.makeDirectory(cwd);
+      const workflow = yield* GitWorkflowService.GitWorkflowService;
+      const driver = yield* GitVcsDriver.GitVcsDriver;
+      for (const args of [
+        ["init", "-b", "main"],
+        ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "--allow-empty", "-m", "init"],
+        ["worktree", "add", "-b", "feature", worktreePath],
+      ]) {
+        yield* driver.execute({ operation: "test.setupRepo", cwd, args });
+      }
+      const error = yield* workflow
+        .removeWorktree({ cwd, path: worktreePath, force: true })
+        .pipe(Effect.flip);
+      assert.equal(error._tag, "GitCommandError");
+      assert.include(
+        error.message,
+        'Delete action "Teardown" exited with code 1: stack still up. The worktree was kept.',
+      );
+      assert.isTrue(yield* fileSystem.exists(worktreePath));
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        workflowLayer(
+          Layer.mock(ProjectSetupScriptRunner.ProjectSetupScriptRunner)({
+            runOnWorktreeDelete: (input) =>
+              Effect.fail(
+                new ProjectSetupScriptRunner.ProjectWorktreeDeleteScriptError({
+                  scriptName: "Teardown",
+                  command: "exit 1",
+                  worktreePath: input.worktreePath,
+                  exitCode: 1,
+                  timedOut: false,
+                  output: "stopping\nstack still up\n",
+                }),
+              ),
+          }),
+        ),
+      ),
+    ),
+  );
 });

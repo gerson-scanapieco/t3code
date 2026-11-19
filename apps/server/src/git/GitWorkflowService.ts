@@ -518,6 +518,19 @@ export const make = Effect.gen(function* () {
         Effect.andThen(
           projectScripts.runOnWorktreeDelete({ projectCwd: input.cwd, worktreePath: input.path }),
         ),
+        Effect.catchTags({
+          ProjectWorktreeDeleteScriptError: (error) =>
+            Effect.fail(
+              new GitCommandError({
+                operation: "GitWorkflowService.removeWorktree",
+                command: error.command,
+                cwd: error.worktreePath,
+                ...(error.exitCode === null ? {} : { exitCode: error.exitCode }),
+                detail: `${error.message} The worktree was kept.`,
+                cause: error,
+              }),
+            ),
+        }),
         Effect.andThen(git.removeWorktree(input)),
       );
     }),

@@ -362,6 +362,7 @@ const cleanupFixture = (
     let storedWorktreePaths: string[] = [worktree];
     let projectRoots = [repo];
     let editBeforeRemoval = false;
+    let deleteScriptFails = false;
     let openSessionCwd: string | null = null;
     let sessionLive = true;
     let sessionLiveChecks = 0;
@@ -383,9 +384,20 @@ const cleanupFixture = (
         runOnWorktreeDelete: (input: ProjectSetupScriptRunner.ProjectWorktreeDeleteScriptInput) =>
           fs.exists(input.worktreePath).pipe(
             Effect.orDie,
-            Effect.map((worktreeExisted) => {
+            Effect.flatMap((worktreeExisted) => {
               deleteScriptRuns.push({ input, worktreeExisted });
-              return { status: "no-script" } as const;
+              return deleteScriptFails
+                ? Effect.fail(
+                    new ProjectSetupScriptRunner.ProjectWorktreeDeleteScriptError({
+                      scriptName: "Teardown",
+                      command: "exit 1",
+                      worktreePath: input.worktreePath,
+                      exitCode: 1,
+                      timedOut: false,
+                      output: "stack still running",
+                    }),
+                  )
+                : Effect.succeed({ status: "no-script" } as const);
             }),
           ),
       } as unknown as ProjectSetupScriptRunner.ProjectSetupScriptRunner["Service"]),
@@ -629,6 +641,9 @@ const cleanupFixture = (
           },
         }) ?? Effect.void,
       deleteScriptRuns,
+      setDeleteScriptFails: (value: boolean) => {
+        deleteScriptFails = value;
+      },
       gitInspections: () => gitInspections,
       fullStatusCalls: () => fullStatusCalls,
       snapshotReads: () => snapshotReads,
@@ -1790,6 +1805,29 @@ describe("deleted thread worktrees", () => {
           worktreeExisted: true,
         },
       ]);
+    }).pipe(Effect.provide(cleanupTestLayer)),
+  );
+
+  it.effect("keeps a deleted thread's worktree when its delete action fails", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(NOW_MS);
+      const fixture = yield* cleanupFixture({
+        ...DEFAULT_SERVER_SETTINGS.storageCleanup,
+        worktreeAfterDays: null,
+        worktreeOnDelete: true,
+      });
+      const owner = parent(fixture.worktree);
+      fixture.setDeletedThreads([owner]);
+      fixture.setThreads([]);
+      fixture.setDeleteScriptFails(true);
+      fixture.setOpenSessionCwd(fixture.worktree);
+      yield* stopSessionAfterStartupSweep(
+        fixture,
+        owner.id,
+        Effect.sync(() => fixture.setSessionLive(false)),
+      );
+      expect(fixture.deleteScriptRuns).toHaveLength(1);
+      expect(yield* fixture.fs.exists(fixture.worktree)).toBe(true);
     }).pipe(Effect.provide(cleanupTestLayer)),
   );
 

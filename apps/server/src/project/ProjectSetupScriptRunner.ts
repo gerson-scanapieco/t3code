@@ -92,13 +92,7 @@ export interface ProjectWorktreeDeleteScriptInput {
 export type ProjectWorktreeDeleteScriptResult =
   | { readonly status: "no-script" }
   | ProjectSetupScriptRunnerResultSkippedForLink
-  | {
-      readonly status: "finished";
-      readonly scriptName: string;
-      /** Null when the script timed out or could not be started. */
-      readonly exitCode: number | null;
-      readonly timedOut: boolean;
-    };
+  | { readonly status: "finished"; readonly scriptName: string };
 
 export class ProjectSetupScriptOperationError extends Schema.TaggedError<ProjectSetupScriptOperationError>()(
   "ProjectSetupScriptOperationError",
@@ -139,6 +133,36 @@ export class ProjectSetupScriptUnsupportedShellError extends Schema.TaggedError<
   }
 }
 
+export class ProjectWorktreeDeleteScriptError extends Schema.TaggedError<ProjectWorktreeDeleteScriptError>()(
+  "ProjectWorktreeDeleteScriptError",
+  {
+    scriptName: Schema.String,
+    command: Schema.String,
+    worktreePath: Schema.String,
+    /** Null when the script timed out or could not be started. */
+    exitCode: Schema.NullOr(Schema.Number),
+    timedOut: Schema.Boolean,
+    output: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {
+  override get message(): string {
+    const outcome = this.timedOut
+      ? `timed out after ${WORKTREE_DELETE_SCRIPT_TIMEOUT}`
+      : this.exitCode === null
+        ? "could not start"
+        : `exited with code ${this.exitCode}`;
+    const lastLine = this.output
+      .split("\n")
+      .map((line) => line.trim())
+      .findLast((line) => line.length > 0);
+    const output = lastLine === undefined ? "" : `: ${lastLine.replace(/\.$/, "")}`;
+    return `Delete action "${this.scriptName}" ${outcome}${output}.`;
+  }
+}
+
+const isProjectWorktreeDeleteScriptError = Schema.is(ProjectWorktreeDeleteScriptError);
+
 export const ProjectSetupScriptRunnerError = Schema.Union([
   ProjectSetupScriptOperationError,
   ProjectSetupScriptProjectNotFoundError,
@@ -152,10 +176,10 @@ export class ProjectSetupScriptRunner extends Context.Service<
     readonly runForThread: (
       input: ProjectSetupScriptRunnerInput,
     ) => Effect.Effect<ProjectSetupScriptRunnerResult, ProjectSetupScriptRunnerError>;
-    /** Runs the project's runOnWorktreeDelete script to completion; failures are logged, never raised. */
+    /** Runs the project's runOnWorktreeDelete script to completion; callers keep the worktree when it fails. */
     readonly runOnWorktreeDelete: (
       input: ProjectWorktreeDeleteScriptInput,
-    ) => Effect.Effect<ProjectWorktreeDeleteScriptResult>;
+    ) => Effect.Effect<ProjectWorktreeDeleteScriptResult, ProjectWorktreeDeleteScriptError>;
   }
 >()("t3/project/ProjectSetupScriptRunner") {}
 
@@ -704,41 +728,36 @@ export const make = Effect.gen(function* () {
         });
         return { exitCode: yield* child.exitCode, output: output.text };
       }).pipe(Effect.scoped, Effect.timeoutOption(WORKTREE_DELETE_SCRIPT_TIMEOUT));
-      const logContext = {
-        scriptName: script.name,
-        worktreePath,
-        ...(input.threadId === undefined ? {} : { threadId: input.threadId }),
-      };
-      const finished = (exitCode: number | null, timedOut: boolean) =>
-        ({ status: "finished", scriptName: script.name, exitCode, timedOut }) as const;
-      const couldNotRun = (error: unknown) =>
-        Effect.logWarning("worktree delete script could not run", { ...logContext, error }).pipe(
-          Effect.as(null),
-        );
+      const failed = (fields: {
+        readonly exitCode: number | null;
+        readonly timedOut: boolean;
+        readonly output: string;
+        readonly cause?: unknown;
+      }) =>
+        new ProjectWorktreeDeleteScriptError({
+          scriptName: script.name,
+          command: script.command,
+          worktreePath,
+          ...fields,
+        });
+      const couldNotRun = (cause: unknown) =>
+        Effect.fail(failed({ exitCode: null, timedOut: false, output: "", cause }));
       const outcome = yield* run.pipe(Effect.catch(couldNotRun), Effect.catchDefect(couldNotRun));
-      if (outcome === null) return finished(null, false);
-      if (Option.isNone(outcome)) {
-        yield* Effect.logWarning("worktree delete script timed out", {
-          ...logContext,
-          timeout: WORKTREE_DELETE_SCRIPT_TIMEOUT,
-        });
-        return finished(null, true);
-      }
+      if (Option.isNone(outcome))
+        return yield* failed({ exitCode: null, timedOut: true, output: "" });
       const { exitCode, output } = outcome.value;
-      if (exitCode !== 0)
-        yield* Effect.logWarning("worktree delete script failed", {
-          ...logContext,
-          exitCode,
-          output,
-        });
-      return finished(exitCode, false);
+      if (exitCode !== 0) return yield* failed({ exitCode, timedOut: false, output });
+      return { status: "finished", scriptName: script.name } as const;
     },
     (effect) => {
       const unresolved = (error: unknown) =>
         Effect.logWarning("worktree delete script was not resolved", { error }).pipe(
           Effect.as({ status: "no-script" } as const),
         );
-      return effect.pipe(Effect.catch(unresolved), Effect.catchDefect(unresolved));
+      return effect.pipe(
+        Effect.catchIf((error) => !isProjectWorktreeDeleteScriptError(error), unresolved),
+        Effect.catchDefect(unresolved),
+      );
     },
   );
 
