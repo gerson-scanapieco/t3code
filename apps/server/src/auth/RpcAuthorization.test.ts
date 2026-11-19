@@ -198,6 +198,63 @@ it.effect("allows issue reads but requires a source-control grant before comment
   }).pipe(Effect.scoped),
 );
 
+it.effect("lets thread readers see a summary but requires operate to write one", () =>
+  Effect.gen(function* () {
+    const tested = [WS_METHODS.threadsSummary, WS_METHODS.threadsGenerateSummary] as const;
+    const group = WsRpcGroup.omit(
+      ...[...WsRpcGroup.requests.keys()].filter(
+        (tag): tag is Exclude<keyof typeof RPC_REQUIRED_SCOPES, (typeof tested)[number]> =>
+          !(tested as ReadonlyArray<string>).includes(tag),
+      ),
+    );
+    const threadId = ThreadId.make("thread-summary");
+    const summary = {
+      threadId,
+      markdown: "- **Goal:** Ship summaries",
+      modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4-mini" },
+      generatedAt: "2026-11-18T00:00:00.000Z",
+    };
+    const generated: Array<ThreadId> = [];
+    const handlers = Layer.mergeAll(
+      group.toLayerHandler(WS_METHODS.threadsSummary, () =>
+        Effect.succeed({ summary: null, generating: false }),
+      ),
+      group.toLayerHandler(WS_METHODS.threadsGenerateSummary, (input) =>
+        Effect.sync(() => {
+          generated.push(input.threadId);
+          return summary;
+        }),
+      ),
+    );
+    const reader = yield* RpcTest.makeClient(group).pipe(
+      Effect.provide(Layer.merge(handlers, RpcAuthorization.layer([AuthOrchestrationReadScope]))),
+    );
+
+    expect(yield* reader[WS_METHODS.threadsSummary]({ threadId })).toEqual({
+      summary: null,
+      generating: false,
+    });
+    expect(
+      yield* reader[WS_METHODS.threadsGenerateSummary]({ threadId }).pipe(Effect.flip),
+    ).toMatchObject({
+      _tag: "EnvironmentAuthorizationError",
+      requiredPermission: AuthOrchestrationOperateScope,
+    });
+    expect(generated).toEqual([]);
+
+    const operator = yield* RpcTest.makeClient(group).pipe(
+      Effect.provide(
+        Layer.merge(
+          handlers,
+          RpcAuthorization.layer([AuthOrchestrationReadScope, AuthOrchestrationOperateScope]),
+        ),
+      ),
+    );
+    expect(yield* operator[WS_METHODS.threadsGenerateSummary]({ threadId })).toEqual(summary);
+    expect(generated).toEqual([threadId]);
+  }).pipe(Effect.scoped),
+);
+
 it.effect.each([WS_METHODS.subscribeVcsBranch, WS_METHODS.subscribeVcsStatus] as const)(
   "enforces read permission on stream %s",
   (method) =>

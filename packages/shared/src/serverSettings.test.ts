@@ -26,6 +26,7 @@ import {
   resolveReviewGuideModelSelection,
   resolveSourceControlWriterModelSelection,
   resolveSpeechPostProcessingModelSelection,
+  resolveThreadSummaryModelSelection,
 } from "./serverSettings.ts";
 
 const decodeServerSettings = Schema.decodeUnknownSync(ServerSettings);
@@ -445,11 +446,13 @@ describe("serverSettings helpers", () => {
       sourceControlWriterModelSelection: selection,
       reviewGuideModelSelection: selection,
       speechPostProcessingModelSelection: selection,
+      threadSummaryModelSelection: selection,
     });
     // A text generator has no provider snapshot; an empty list must not read as unusable.
     const on = settings(true);
     expect(resolveSourceControlWriterModelSelection(on, [], null)).toBe(selection);
     expect(resolveSpeechPostProcessingModelSelection(on, [])).toBe(selection);
+    expect(resolveThreadSummaryModelSelection(on, [], null)).toBe(selection);
     expect(resolveReviewGuideModelSelection(on, [], null)).toBe(selection);
     expect(
       resolveReviewGuideModelSelection(
@@ -466,6 +469,12 @@ describe("serverSettings helpers", () => {
     expect(resolveSpeechPostProcessingModelSelection(off, [])).toBe(
       off.textGenerationModelSelection,
     );
+    expect(resolveThreadSummaryModelSelection(off, [], null)).toBe(
+      off.textGenerationModelSelection,
+    );
+    expect(
+      resolveThreadSummaryModelSelection({ ...on, threadSummaryModelSelection: null }, [], null),
+    ).toBe(on.textGenerationModelSelection);
   });
 
   it("falls back from a writer provider a project turned off, keeping it for other projects", () => {
@@ -1092,6 +1101,27 @@ describe("resolveSpeechPostProcessingModelSelection", () => {
     expect(
       applyServerSettingsPatch(pinned, { speechPostProcessingModelSelection: null })
         .speechPostProcessingModelSelection,
+    ).toBeNull();
+  });
+});
+
+describe("threadSummaryModelSelection patches", () => {
+  it("replace the whole selection so a new model drops the previous model's options", () => {
+    const pinned = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
+      threadSummaryModelSelection: createModelSelection(
+        ProviderInstanceId.make("claudeAgent"),
+        "claude-haiku",
+        [{ id: "effort", value: "low" }],
+      ),
+    });
+    const next = createModelSelection(ProviderInstanceId.make("codex"), "gpt-6-luna");
+    expect(
+      applyServerSettingsPatch(pinned, { threadSummaryModelSelection: next })
+        .threadSummaryModelSelection,
+    ).toEqual(next);
+    expect(
+      applyServerSettingsPatch(pinned, { threadSummaryModelSelection: null })
+        .threadSummaryModelSelection,
     ).toBeNull();
   });
 });

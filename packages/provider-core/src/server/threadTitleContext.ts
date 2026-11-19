@@ -27,7 +27,13 @@ export function limitTitleMessage(text: string, budget: number): string {
   return `${text.slice(0, head)}${TRUNCATED}${tail > 0 ? text.slice(-tail) : ""}`;
 }
 
-export function formatThreadTitleContext(messages: ReadonlyArray<ThreadTitleMessage>) {
+export function formatThreadTitleContext(
+  messages: ReadonlyArray<ThreadTitleMessage>,
+  limits: { readonly context: number; readonly message: number } = {
+    context: MAX_CONTEXT,
+    message: MAX_MESSAGE,
+  },
+) {
   const sections = messages.flatMap((source, index) => {
     const message = isAttachmentOnlyBootstrapPrompt(source.text) ? { ...source, text: "" } : source;
     // Thinking traces dwarf answers without identifying the thread subject.
@@ -52,7 +58,7 @@ export function formatThreadTitleContext(messages: ReadonlyArray<ThreadTitleMess
     return contents;
   };
   const selected = new Map<number, string>();
-  let remaining = MAX_CONTEXT - OMITTED.length;
+  let remaining = limits.context - OMITTED.length;
   const add = (section: (typeof sections)[number], budget: number) => {
     if (selected.has(section.index)) return;
     const limit = Math.min(budget, remaining) - section.prefix.length - 2;
@@ -65,14 +71,14 @@ export function formatThreadTitleContext(messages: ReadonlyArray<ThreadTitleMess
   };
 
   const firstUser = sections.find((section) => section.message.role === "user");
-  if (firstUser) add(firstUser, MAX_MESSAGE);
+  if (firstUser) add(firstUser, limits.message);
   for (const section of sections.toReversed()) {
     if (section.message.role === "user") {
-      add(section, Math.min(MAX_MESSAGE, remaining - 2_000));
+      add(section, Math.min(limits.message, remaining - 2_000));
     }
   }
   for (const section of sections.toReversed()) {
-    if (section.message.role === "assistant") add(section, MAX_MESSAGE);
+    if (section.message.role === "assistant") add(section, limits.message);
   }
   for (const role of ["user", "assistant"] as const) {
     for (const section of sections.toReversed()) {

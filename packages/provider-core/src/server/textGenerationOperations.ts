@@ -11,6 +11,7 @@ import {
   buildCommitMessagePrompt,
   buildPrContentPrompt,
   buildReviewGuidePrompt,
+  buildThreadSummaryPrompt,
   buildThreadTitlePrompt,
 } from "./textGenerationPrompts.ts";
 import {
@@ -82,6 +83,18 @@ export const generatedThreadTitle = (raw: string) => {
         }),
       )
     : Effect.succeed(title);
+};
+
+export const generatedThreadSummary = (raw: string) => {
+  const summary = raw.trim();
+  return summary.length === 0
+    ? Effect.fail(
+        new TextGenerationError({
+          operation: "generateThreadSummary",
+          detail: "The model returned an empty summary.",
+        }),
+      )
+    : Effect.succeed(summary);
 };
 
 export function fromRunner(name: string, run: Runner): ProviderTextGeneration {
@@ -171,6 +184,18 @@ export function fromRunner(name: string, run: Runner): ProviderTextGeneration {
     };
   });
 
+  const generateThreadSummary: ProviderTextGeneration["generateThreadSummary"] = Effect.fn(
+    `${name}.generateThreadSummary`,
+  )(function* (input) {
+    const generated = yield* run({
+      operation: "generateThreadSummary",
+      cwd: input.cwd,
+      modelSelection: input.modelSelection,
+      ...buildThreadSummaryPrompt(input),
+    });
+    return { summary: yield* generatedThreadSummary(generated.summary) };
+  });
+
   const generateTranscriptionPostProcessing: ProviderTextGeneration["generateTranscriptionPostProcessing"] =
     Effect.fn(`${name}.generateTranscriptionPostProcessing`)(function* (input) {
       return yield* run({
@@ -199,6 +224,7 @@ export function fromRunner(name: string, run: Runner): ProviderTextGeneration {
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    generateThreadSummary,
     generateReviewGuide,
     generateTranscriptionPostProcessing,
   } satisfies ProviderTextGeneration;

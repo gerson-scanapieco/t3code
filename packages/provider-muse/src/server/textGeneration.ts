@@ -24,6 +24,7 @@ import { museModelCapabilities, resolveMuseReasoningEffort } from "./modelCatalo
 import { isMuseUsageLimitFailure } from "./usageLimits.ts";
 import type { ProviderTextGeneration } from "@t3tools/provider-core/server/textGeneration";
 import {
+  generatedThreadSummary,
   generatedThreadTitle,
   investigationUnsupported,
   TranscriptionPostProcessingOutput,
@@ -32,6 +33,7 @@ import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
   buildPrContentPrompt,
+  buildThreadSummaryPrompt,
   buildThreadTitlePrompt,
 } from "@t3tools/provider-core/server/textGenerationPrompts";
 import {
@@ -383,6 +385,16 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
     });
     return { title: yield* generatedThreadTitle(generated.title) };
   });
+  const generateThreadSummary: ProviderTextGeneration["generateThreadSummary"] = Effect.fn(
+    "MuseTextGeneration.generateThreadSummary",
+  )(function* (input) {
+    const generated = yield* runMuseJson({
+      operation: "generateThreadSummary",
+      ...buildThreadSummaryPrompt(input),
+      modelSelection: input.modelSelection,
+    });
+    return { summary: yield* generatedThreadSummary(generated.summary) };
+  });
   const generateTranscriptionPostProcessing: ProviderTextGeneration["generateTranscriptionPostProcessing"] =
     Effect.fn("MuseTextGeneration.generateTranscriptionPostProcessing")(function* (input) {
       return yield* runMuseJson({
@@ -399,6 +411,7 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    generateThreadSummary,
     generateReviewGuide,
     generateTranscriptionPostProcessing,
   } satisfies ProviderTextGeneration;
