@@ -13,7 +13,10 @@ import {
   MIN_APPEARANCE_CONTRAST,
   MIN_GLASS_OPACITY,
   MIN_PANEL_ANIMATION_DURATION_MS,
+  MAX_WINDOW_OPACITY,
+  MIN_WINDOW_OPACITY,
 } from "@t3tools/contracts/settings";
+import { supportsWindowOpacity } from "../../lib/windowOpacity";
 import {
   resolveSidebarStageBackdropVariant,
   type SidebarStageBackdropVariant,
@@ -131,6 +134,12 @@ export function AppearanceSettingsPanel() {
   const glassOpacitySliderStyle = {
     "--settings-slider-progress": `${glassOpacityRatio * 100}%`,
     "--settings-slider-fill-offset": `${0.5 - glassOpacityRatio}rem`,
+  } as CSSProperties;
+  const windowOpacityRatio =
+    (settings.windowOpacity - MIN_WINDOW_OPACITY) / (MAX_WINDOW_OPACITY - MIN_WINDOW_OPACITY);
+  const windowOpacitySliderStyle = {
+    "--settings-slider-progress": `${windowOpacityRatio * 100}%`,
+    "--settings-slider-fill-offset": `${0.5 - windowOpacityRatio}rem`,
   } as CSSProperties;
   const appearanceContrastRatio =
     (settings.appearanceContrast - MIN_APPEARANCE_CONTRAST) /
@@ -261,6 +270,56 @@ export function AppearanceSettingsPanel() {
             </div>
           }
         />
+
+        {supportsWindowOpacity ? (
+          <SettingsRow
+            {...searchableSetting("setting-window-opacity")}
+            description={gt(
+              "Lower values let the blurred desktop show through the window. Glass opacity sets menus and dialogs.",
+            )}
+            resetAction={
+              settings.windowOpacity !== DEFAULT_UNIFIED_SETTINGS.windowOpacity ? (
+                <SettingResetButton
+                  ariaLabel={gt("Reset window opacity to default")}
+                  onClick={() =>
+                    updateSettings({ windowOpacity: DEFAULT_UNIFIED_SETTINGS.windowOpacity })
+                  }
+                />
+              ) : null
+            }
+            control={
+              <div className="flex w-full items-center gap-3 sm:w-52">
+                <output
+                  className="min-w-12 rounded-md bg-muted px-2 py-1 text-center font-mono text-xs font-medium tabular-nums text-foreground"
+                  htmlFor="window-opacity"
+                >
+                  {settings.windowOpacity}%
+                </output>
+                <input
+                  aria-label={gt("Window opacity")}
+                  className="settings-slider min-w-0 flex-1"
+                  id="window-opacity"
+                  max={MAX_WINDOW_OPACITY}
+                  min={MIN_WINDOW_OPACITY}
+                  onChange={(event) => {
+                    const windowOpacity = Number(event.currentTarget.value);
+                    if (
+                      Number.isInteger(windowOpacity) &&
+                      windowOpacity >= MIN_WINDOW_OPACITY &&
+                      windowOpacity <= MAX_WINDOW_OPACITY
+                    ) {
+                      updateSettings({ windowOpacity });
+                    }
+                  }}
+                  step={5}
+                  style={windowOpacitySliderStyle}
+                  type="range"
+                  value={settings.windowOpacity}
+                />
+              </div>
+            }
+          />
+        ) : null}
 
         <SettingsRow
           {...searchableSetting("chat-width")}
