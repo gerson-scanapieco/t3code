@@ -8,6 +8,14 @@ export function projectScriptMenuLabel(
   resolve: MFunctionType = mFallback,
 ): string {
   const name = script.name;
+  if (script.runOnWorktreeDelete) {
+    if (script.runOnWorktreeCreate && script.runOnSettle) {
+      return resolve(msg("{name} (setup, on settle, on delete)", { name }));
+    }
+    if (script.runOnWorktreeCreate) return resolve(msg("{name} (setup, on delete)", { name }));
+    if (script.runOnSettle) return resolve(msg("{name} (on settle, on delete)", { name }));
+    return resolve(msg("{name} (on delete)", { name }));
+  }
   if (script.runOnWorktreeCreate && script.runOnSettle) {
     return resolve(msg("{name} (setup, on settle)", { name }));
   }

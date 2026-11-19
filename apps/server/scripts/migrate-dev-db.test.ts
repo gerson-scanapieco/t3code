@@ -43,6 +43,7 @@ const createFixtureSource = Effect.fn("createMigrateDevDbFixtureSource")(functio
           icon: "configure",
           runOnWorktreeCreate: false,
           runOnSettle: true,
+          runOnWorktreeDelete: true,
         },
       ]);
       yield* sql`INSERT INTO projection_projects
@@ -232,7 +233,7 @@ it.layer(NodeServices.layer)("migrate-dev-db", (it) => {
             runOnWorktreeCreate: false,
           },
         ],
-        "copied project scripts stay listed but never run on settle in the original checkout",
+        "copied project scripts stay listed but never run on settle or delete in the original checkout",
       );
       assert.deepStrictEqual(kept.leftovers, {
         auth: 0,

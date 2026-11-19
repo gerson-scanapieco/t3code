@@ -30,6 +30,7 @@ import {
 } from "@t3tools/contracts";
 
 import * as GitManager from "./GitManager.ts";
+import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 import { withWorkspaceLease } from "../workspace/workspaceLease.ts";
@@ -193,6 +194,7 @@ export const make = Effect.gen(function* () {
   const git = yield* GitVcsDriver.GitVcsDriver;
   const gitManager = yield* GitManager.GitManager;
   const fileSystem = yield* FileSystem.FileSystem;
+  const projectScripts = yield* ProjectSetupScriptRunner.ProjectSetupScriptRunner;
 
   // Nested projects and path aliases must share the checkout's branch-mutation lease.
   const withCheckoutLease = <A, E, R>(rootPath: string, effect: Effect.Effect<A, E, R>) =>
@@ -513,6 +515,9 @@ export const make = Effect.gen(function* () {
     ),
     removeWorktree: Effect.fn("GitWorkflowService.removeWorktree")(function (input) {
       return ensureGitCommand("GitWorkflowService.removeWorktree", input.cwd).pipe(
+        Effect.andThen(
+          projectScripts.runOnWorktreeDelete({ projectCwd: input.cwd, worktreePath: input.path }),
+        ),
         Effect.andThen(git.removeWorktree(input)),
       );
     }),
