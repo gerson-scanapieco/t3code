@@ -2,7 +2,6 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   hasPreviewUrlPlaceholders,
-  parseDotenv,
   previewUrlPlaceholderNames,
   substitutePreviewUrl,
 } from "./previewUrlTemplate.ts";
@@ -57,42 +56,5 @@ describe("substitutePreviewUrl", () => {
       }),
     ).toEqual({ _tag: "Resolved", url: "http://localhost:5173/$PORT" });
     expect(calls).toEqual([]);
-  });
-});
-
-describe("parseDotenv", () => {
-  it("reads assignments, quotes, export prefixes, and comments", () => {
-    const values = parseDotenv(
-      [
-        "﻿# worktree ports",
-        "PORT=3103",
-        "export HOST = 127.0.0.1",
-        "  SPACED=  value with spaces   # trailing comment",
-        "HASH=abc#def",
-        "SINGLE='literal $HOME # not a comment'",
-        'DOUBLE="say \\"hi\\"\\nnext" # comment',
-        "EMPTY=",
-        "",
-        "not a line",
-        "1BAD=x",
-        'UNTERMINATED="open',
-        "PORT=3104",
-      ].join("\r\n"),
-    );
-    expect(Object.fromEntries(values)).toEqual({
-      PORT: "3104",
-      HOST: "127.0.0.1",
-      SPACED: "value with spaces",
-      HASH: "abc#def",
-      SINGLE: "literal $HOME # not a comment",
-      DOUBLE: 'say "hi"\nnext',
-      EMPTY: "",
-    });
-  });
-
-  it("does not expand references or run commands", () => {
-    const values = parseDotenv("URL=http://${HOST}:$(whoami)\nCMD=`id`");
-    expect(values.get("URL")).toBe("http://${HOST}:$(whoami)");
-    expect(values.get("CMD")).toBe("`id`");
   });
 });

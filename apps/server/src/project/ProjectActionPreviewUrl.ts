@@ -1,3 +1,5 @@
+import * as NodeUtil from "node:util";
+
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -13,7 +15,6 @@ import {
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import {
   hasPreviewUrlPlaceholders,
-  parseDotenv,
   PREVIEW_URL_ENV_FILE,
   substitutePreviewUrl,
 } from "@t3tools/shared/previewUrlTemplate";
@@ -46,11 +47,11 @@ const make = Effect.gen(function* () {
     if (!hasPreviewUrlPlaceholders(input.url)) return { url: input.url };
     const envFilePath = path.join(input.cwd, PREVIEW_URL_ENV_FILE);
     const envFile = yield* fileSystem.readFileString(envFilePath).pipe(
-      Effect.map(parseDotenv),
+      Effect.map((text) => new Map(Object.entries(NodeUtil.parseEnv(text)))),
       Effect.catchTags({
         PlatformError: (cause) =>
           cause.reason._tag === "NotFound"
-            ? Effect.succeed(new Map<string, string>())
+            ? Effect.succeed(new Map<string, string | undefined>())
             : Effect.fail(new PreviewActionUrlEnvFileReadError({ envFilePath, cause })),
       }),
     );
@@ -58,8 +59,8 @@ const make = Effect.gen(function* () {
     const result = substitutePreviewUrl(
       input.url,
       (name) =>
-        envFile.get(name) ??
-        input.env?.[name] ??
+        envFile.get(name) ||
+        input.env?.[name] ||
         (shouldExcludeTerminalEnvKey(name) ? undefined : hostEnv[name]),
     );
     if (result._tag === "Missing") {

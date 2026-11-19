@@ -30,6 +30,7 @@ const resolve = (
     Effect.provideService(HostProcess.Environment, {
       PORT: "8080",
       SERVER_HOST: "server.test",
+      BASE: "from-server",
       T3CODE_HOME: "/secret",
     }),
   );
@@ -38,7 +39,7 @@ it.layer(layerTest)("ProjectActionPreviewUrl", (it) => {
   describe("resolve", () => {
     it.effect("prefers the worktree's .env.local, then the action env, then the server env", () =>
       Effect.gen(function* () {
-        const { cwd } = yield* makeWorktree("PORT=3103\nAPP_PATH=from-file\n");
+        const { cwd } = yield* makeWorktree("PORT=3103\nAPP_PATH=from-file\nBASE=\n");
         const result = yield* resolve({
           cwd,
           url: "http://${SERVER_HOST}:${PORT}/${APP_PATH}/${BASE}",
