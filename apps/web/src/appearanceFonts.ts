@@ -2,9 +2,11 @@ import {
   DEFAULT_CODE_FONT_SIZE,
   DEFAULT_INTERFACE_FONT_SIZE,
   DEFAULT_PROMPT_FONT_SIZE,
+  MAX_CHAT_FONT_SIZE,
   MAX_CODE_FONT_SIZE,
   MAX_INTERFACE_FONT_SIZE,
   MAX_PROMPT_FONT_SIZE,
+  MIN_CHAT_FONT_SIZE,
   MIN_CODE_FONT_SIZE,
   MIN_INTERFACE_FONT_SIZE,
   MIN_PROMPT_FONT_SIZE,
@@ -64,12 +66,13 @@ export interface AppearanceFontPreferences {
   readonly composer: string;
   readonly sizeInterface: number;
   readonly sizePrompt: number;
+  readonly sizeChat: number | null;
   readonly sizeCode: number;
   readonly smoothing: boolean;
   readonly separate: boolean;
 }
 
-/** Interface size sets the root; prompt and code use pixels to avoid double scaling. */
+/** Interface size sets the root; prompt, chat, and code use pixels to avoid double scaling. */
 export function applyAppearanceFontVariables(
   root: HTMLElement,
   preferences: AppearanceFontPreferences,
@@ -103,6 +106,13 @@ export function applyAppearanceFontVariables(
     "--font-size-prompt",
     preferences.separate ? `${clampPromptFontSize(preferences.sizePrompt)}px` : "var(--text-sm)",
   );
+  if (preferences.sizeChat === null || !Number.isFinite(preferences.sizeChat)) {
+    root.style.removeProperty("--font-size-chat");
+    delete root.dataset.chatFontSize;
+  } else {
+    root.style.setProperty("--font-size-chat", `${clampChatFontSize(preferences.sizeChat)}px`);
+    root.dataset.chatFontSize = "";
+  }
   const code = clampCodeFontSize(preferences.sizeCode);
   root.style.setProperty("--font-size-code", `${code}px`);
   root.style.setProperty("--diffs-font-size", `${code}px`);
@@ -130,6 +140,10 @@ function clampInterfaceFontSize(value: number): number {
 
 function clampPromptFontSize(value: number): number {
   return clampFontSize(value, MIN_PROMPT_FONT_SIZE, MAX_PROMPT_FONT_SIZE, DEFAULT_PROMPT_FONT_SIZE);
+}
+
+function clampChatFontSize(value: number): number {
+  return Math.min(MAX_CHAT_FONT_SIZE, Math.max(MIN_CHAT_FONT_SIZE, Math.round(value)));
 }
 
 function clampCodeFontSize(value: number): number {

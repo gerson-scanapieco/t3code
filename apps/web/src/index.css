@@ -1801,6 +1801,43 @@ code {
   font-size: var(--font-size-code, inherit);
 }
 
+/* A chat font size rebases the rem text tokens inside timeline rows on it, so
+   prose, work rows, and markdown keep their ratios to each other. Without the
+   attribute chat text follows the interface size. Code keeps its own size. */
+:root[data-chat-font-size] :is(.messages-timeline-row-frame, .chat-font-preview) {
+  --text-xs: calc(var(--font-size-chat) * 12 / 14);
+  --text-sm: var(--font-size-chat);
+  --text-base: calc(var(--font-size-chat) * 16 / 14);
+  --text-lg: calc(var(--font-size-chat) * 18 / 14);
+
+  & .font-mono {
+    --text-xs: 0.75rem;
+    --text-sm: 0.875rem;
+    --text-base: 1rem;
+    --text-lg: 1.125rem;
+  }
+
+  & .chat-markdown h1 {
+    font-size: calc(var(--font-size-chat) * 20 / 14);
+  }
+
+  & .chat-markdown h2 {
+    font-size: calc(var(--font-size-chat) * 18 / 14);
+  }
+
+  & .chat-markdown h3 {
+    font-size: calc(var(--font-size-chat) * 16 / 14);
+  }
+
+  & .chat-markdown :is(h4, h5, h6, table) {
+    font-size: var(--font-size-chat);
+  }
+
+  & .chat-markdown section[data-footnotes] {
+    font-size: calc(var(--font-size-chat) * 12 / 14);
+  }
+}
+
 /* @pierre/diffs surfaces (diffs, file previews, annotatable code, search
    lines) render inside shadow roots but consult these hooks with their own
    literal stacks as fallback. Custom properties inherit across the shadow
