@@ -32,6 +32,15 @@ export class ThreadSummaryRepository extends Context.Service<
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
 
+  // Fork-only regenerable cache: created here rather than as a numbered migration so upstream's
+  // next migration ids never collide with it.
+  yield* sql`
+    CREATE TABLE IF NOT EXISTS thread_summaries (
+      thread_id TEXT PRIMARY KEY,
+      summary_json TEXT NOT NULL
+    ) WITHOUT ROWID
+  `.pipe(Effect.orDie);
+
   const findSummary = SqlSchema.findOneOption({
     Request: ThreadId,
     Result: SummaryRow,

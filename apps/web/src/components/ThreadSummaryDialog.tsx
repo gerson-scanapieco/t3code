@@ -5,6 +5,7 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { formatModelSelectionEffort } from "@t3tools/client-runtime/state/thread-execution";
+import { resolveThreadSummaryPresentation } from "@t3tools/client-runtime/state/thread-summaries";
 import type { ScopedThreadRef, ThreadSummary } from "@t3tools/contracts";
 import { formatModelSlugName } from "@t3tools/shared/model";
 import { T, useGT } from "gt-react";
@@ -69,6 +70,7 @@ function ThreadSummaryDialog({
   });
   const [generating, setGenerating] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const [generated, setGenerated] = useState<ThreadSummary | null>(null);
 
   const generate = async () => {
     setGenerating(true);
@@ -78,7 +80,11 @@ function ThreadSummaryDialog({
       input: { threadId: threadRef.threadId },
     });
     setGenerating(false);
-    if (result._tag === "Success" || isAtomCommandInterrupted(result)) return;
+    if (result._tag === "Success") {
+      setGenerated(result.value);
+      return;
+    }
+    if (isAtomCommandInterrupted(result)) return;
     const error = squashAtomCommandFailure(result);
     setFailure(error instanceof Error ? error.message : gt("The summary could not be written."));
   };
@@ -92,9 +98,15 @@ function ThreadSummaryDialog({
     void generate();
   });
 
-  const summary = query.data?.summary ?? null;
-  const busy = generating || (serverGenerating && !canGenerate);
-  const error = failure ?? (query.data === null ? query.error : null);
+  const { body, action, error } = resolveThreadSummaryPresentation({
+    data: query.data,
+    isPending: query.isPending,
+    queryError: query.error,
+    failure,
+    generating,
+    canGenerate,
+    generated,
+  });
 
   return (
     <Dialog
@@ -111,28 +123,28 @@ function ThreadSummaryDialog({
           {thread ? <DialogDescription>{thread.title}</DialogDescription> : null}
         </DialogHeader>
         <DialogPanel>
-          {query.data === null && query.isPending ? (
+          {body.kind === "loading" ? (
             <div className="grid gap-2">
               <Skeleton className="h-4 w-3/4" />
               <Skeleton className="h-4 w-full" />
               <Skeleton className="h-4 w-2/3" />
             </div>
-          ) : summary !== null ? (
+          ) : body.kind === "summary" ? (
             <div className="grid gap-3">
               <ChatMarkdown
-                text={summary.markdown}
+                text={body.summary.markdown}
                 cwd={thread?.worktreePath ?? undefined}
                 threadRef={threadRef}
                 environmentId={threadRef.environmentId}
               />
-              <SummaryProvenance environmentId={threadRef.environmentId} summary={summary} />
+              <SummaryProvenance environmentId={threadRef.environmentId} summary={body.summary} />
             </div>
-          ) : busy ? (
+          ) : body.kind === "writing" ? (
             <p className="flex items-center gap-2 text-muted-foreground text-sm">
               <Spinner size="sm" />
               <T>Writing a summary…</T>
             </p>
-          ) : query.data !== null ? (
+          ) : body.kind === "empty" ? (
             <p className="text-muted-foreground text-sm">
               <T>
                 No summary yet. Generate one to see the thread&apos;s goal, what was done, and where
@@ -150,12 +162,18 @@ function ThreadSummaryDialog({
           <Button variant="outline" size="sm" onClick={onClose}>
             <T context="button that closes the dialog">Close</T>
           </Button>
-          {query.data !== null ? (
-            <Button size="sm" onClick={() => void generate()} disabled={!canGenerate || busy}>
-              {busy ? <Spinner /> : summary !== null ? <RefreshCwIcon /> : <FileTextIcon />}
-              {busy
+          {action !== null ? (
+            <Button size="sm" onClick={() => void generate()} disabled={action.disabled}>
+              {action.kind === "generating" ? (
+                <Spinner />
+              ) : action.kind === "regenerate" ? (
+                <RefreshCwIcon />
+              ) : (
+                <FileTextIcon />
+              )}
+              {action.kind === "generating"
                 ? gt("Generating…")
-                : summary !== null
+                : action.kind === "regenerate"
                   ? gt("Regenerate", { $context: "verb, write the thread summary again" })
                   : gt("Generate summary")}
             </Button>

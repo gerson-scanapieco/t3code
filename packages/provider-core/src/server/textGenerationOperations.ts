@@ -85,8 +85,24 @@ export const generatedThreadTitle = (raw: string) => {
     : Effect.succeed(title);
 };
 
+// Some models nest the whole structured output inside the summary field.
+function unwrapEchoedSummary(text: string): string {
+  if (!text.startsWith("{")) return text;
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return typeof parsed === "object" &&
+      parsed !== null &&
+      "summary" in parsed &&
+      typeof parsed.summary === "string"
+      ? parsed.summary.trim()
+      : text;
+  } catch {
+    return text;
+  }
+}
+
 export const generatedThreadSummary = (raw: string) => {
-  const summary = raw.trim();
+  const summary = unwrapEchoedSummary(raw.trim());
   return summary.length === 0
     ? Effect.fail(
         new TextGenerationError({
