@@ -31,6 +31,7 @@ import * as StorageCleanup from "./storageCleanup.ts";
 import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
 import * as GitManager from "./git/GitManager.ts";
 import * as GitWorkflowService from "./git/GitWorkflowService.ts";
+import * as ProjectSetupScriptRunner from "./project/ProjectSetupScriptRunner.ts";
 import * as Settings from "./serverSettings.ts";
 import * as ProjectionStore from "./orchestration-v2/ProjectionStore.ts";
 import * as ProviderSessionManager from "./orchestration-v2/ProviderSessionManager.ts";
@@ -372,8 +373,22 @@ const cleanupFixture = (
     let snapshotReads = 0;
     let terminalListener: ((event: TerminalMetadataStreamEvent) => Effect.Effect<void>) | undefined;
     let events: Stream.Stream<OrchestrationV2DomainEvent> = Stream.empty;
+    const deleteScriptRuns: Array<{
+      readonly input: ProjectSetupScriptRunner.ProjectWorktreeDeleteScriptInput;
+      readonly worktreeExisted: boolean;
+    }> = [];
     const activated = yield* Deferred.make<void>();
     const context = yield* Layer.build(StorageCleanup.layer).pipe(
+      Effect.provideService(ProjectSetupScriptRunner.ProjectSetupScriptRunner, {
+        runOnWorktreeDelete: (input: ProjectSetupScriptRunner.ProjectWorktreeDeleteScriptInput) =>
+          fs.exists(input.worktreePath).pipe(
+            Effect.orDie,
+            Effect.map((worktreeExisted) => {
+              deleteScriptRuns.push({ input, worktreeExisted });
+              return { status: "no-script" } as const;
+            }),
+          ),
+      } as unknown as ProjectSetupScriptRunner.ProjectSetupScriptRunner["Service"]),
       Effect.provideService(GitVcsDriver.GitVcsDriver, {
         ...git,
         execute: (input) =>
@@ -613,6 +628,7 @@ const cleanupFixture = (
             ...paths,
           },
         }) ?? Effect.void,
+      deleteScriptRuns,
       gitInspections: () => gitInspections,
       fullStatusCalls: () => fullStatusCalls,
       snapshotReads: () => snapshotReads,
@@ -1763,6 +1779,17 @@ describe("deleted thread worktrees", () => {
       );
       expect(reads).toBeGreaterThan(0);
       expect(yield* fixture.fs.exists(fixture.worktree)).toBe(false);
+      expect(fixture.deleteScriptRuns).toEqual([
+        {
+          input: {
+            threadId: owner.id,
+            projectId: owner.projectId,
+            projectCwd: fixture.repo,
+            worktreePath: fixture.worktree,
+          },
+          worktreeExisted: true,
+        },
+      ]);
     }).pipe(Effect.provide(cleanupTestLayer)),
   );
 
@@ -2634,6 +2661,9 @@ describe("storage cleanup reports and local file policies", () => {
           ],
         });
         expect(yield* fixture.fs.exists(fixture.worktree)).toBe(false);
+        expect(fixture.deleteScriptRuns).toMatchObject([
+          { input: { worktreePath: fixture.worktree }, worktreeExisted: true },
+        ]);
       }),
     ),
   );
@@ -3444,7 +3474,8 @@ describe("storage cleanup reports and local file policies", () => {
   it.live("keeps staged edits in tracked-only mode", () =>
     runCleanupTest(
       Effect.gen(function* () {
-        const { service, fs, worktree, setPolicy, command } = yield* cleanupFixture();
+        const { service, fs, worktree, setPolicy, command, deleteScriptRuns } =
+          yield* cleanupFixture();
         setPolicy("tracked-changes");
         yield* fs.writeFileString(`${worktree}/tracked.txt`, "staged\n");
         yield* command(worktree, ["add", "tracked.txt"]);
@@ -3453,6 +3484,7 @@ describe("storage cleanup reports and local file policies", () => {
           reason: "Has uncommitted changes (1 file)",
         });
         expect(yield* fs.exists(worktree)).toBe(true);
+        expect(deleteScriptRuns, "a kept worktree never runs its delete script").toEqual([]);
       }),
     ),
   );

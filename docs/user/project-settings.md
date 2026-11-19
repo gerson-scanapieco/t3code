@@ -264,6 +264,14 @@ thread is deleted, including archived threads and worktrees left by earlier dele
 server waits for sessions and terminals to stop and retries skipped worktrees after restart.
 Existing prompts for deleting a worktree manually remain available when this policy is off.
 
+To stop what a worktree started outside its folder, such as a dev server or a Docker stack, turn on
+**Run in the thread's worktree before it is deleted** for one of the project's actions, or set
+`"runOnWorktreeDelete": true` on a `t3.json` script. It runs in the worktree each time T3 Code
+removes one: when you delete a thread with its worktree, when cleanup removes it, or when a
+thread's start is cancelled or fails after its worktree was created. It runs in the background rather than in a terminal,
+with `T3CODE_WORKTREE_PATH` and `T3CODE_PROJECT_ROOT` set, and is stopped after 3 minutes. A
+failure or timeout is written to the server log and does not stop the removal.
+
 Choose **Delete now** to run the enabled rules immediately. The latest results show which
 worktrees were removed or kept and why, plus any failures.
 Results also list folders in the worktree folder that no thread uses, with their sizes; cleanup never removes them, so remove them manually if you want.

@@ -2,6 +2,7 @@ import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, expect, it } from "@effect/vitest";
 import {
+  type Project,
   ProjectId,
   TerminalNotRunningError,
   type TerminalEvent,
@@ -12,8 +13,10 @@ import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Queue from "effect/Queue";
+import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { TestClock } from "effect/testing";
@@ -85,6 +88,7 @@ const makeHarness = Effect.fn(function* (options: {
         }),
         ServerSettings.layerTest(),
         NodeCrypto.layer,
+        NodeServices.layer,
       ),
     ),
   );
@@ -361,5 +365,161 @@ describe.skipIf(HostProcess.Platform.defaultValue() === "win32")("POSIX setup co
       const result = yield* runObservedSetup(command);
       assert.equal(result.exitCode, exitCode);
     }),
+  );
+});
+
+const makeDeleteHarness = Effect.fn(function* (options: {
+  readonly command: string;
+  readonly linked?: boolean;
+  readonly spawner?: Layer.Layer<ChildProcessSpawner.ChildProcessSpawner>;
+}) {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const root = yield* fileSystem.realPath(
+    yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-delete-script-" }),
+  );
+  const worktreePath = `${root}/worktree`;
+  yield* fileSystem.makeDirectory(worktreePath);
+  const project = {
+    id: ProjectId.make("project-1"),
+    workspaceRoot: `${root}/repo`,
+    scripts: [
+      {
+        id: "teardown",
+        name: "Teardown",
+        command: options.command,
+        icon: "configure",
+        runOnWorktreeCreate: false,
+        runOnWorktreeDelete: true,
+      },
+    ],
+  } as unknown as Project;
+  const runner = yield* ProjectSetupScriptRunner.make.pipe(
+    Effect.provide(
+      Layer.mergeAll(
+        Layer.mock(TerminalManager.TerminalManager)({}),
+        Layer.mock(ProjectService.ProjectService)({
+          getById: () => Effect.succeedSome(project),
+          getByWorkspaceRoot: () => Effect.succeedSome(project),
+        }),
+        Layer.mock(ProjectionStore.ProjectionStoreV2)({
+          getThreadShell: () =>
+            Effect.succeed(
+              (options.linked
+                ? { linkOrigin: { sessionId: "mcp-session:linked", label: "Linked laptop" } }
+                : null) as never,
+            ),
+        }),
+        ServerSettings.layerTest(),
+        NodeCrypto.layer,
+        options.spawner ?? Layer.empty,
+      ),
+    ),
+  );
+  return { runner, worktreePath, projectRoot: project.workspaceRoot, fileSystem };
+});
+
+describe("worktree delete script", () => {
+  it.live.skipIf(HostProcess.Platform.defaultValue() === "win32")(
+    "runs in the worktree with the project script env",
+    () =>
+      Effect.gen(function* () {
+        const { runner, worktreePath, projectRoot, fileSystem } = yield* makeDeleteHarness({
+          command:
+            'printf "%s|%s|%s" "$(pwd -P)" "$T3CODE_WORKTREE_PATH" "$T3CODE_PROJECT_ROOT" > seen',
+        });
+        const result = yield* runner.runOnWorktreeDelete({
+          projectCwd: projectRoot,
+          worktreePath,
+        });
+        assert.deepEqual(result, {
+          status: "finished",
+          scriptName: "Teardown",
+          exitCode: 0,
+          timedOut: false,
+        });
+        assert.equal(
+          yield* fileSystem.readFileString(`${worktreePath}/seen`),
+          `${worktreePath}|${worktreePath}|${projectRoot}`,
+        );
+      }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
+  it.live("reports a failing script without failing", () =>
+    Effect.gen(function* () {
+      const { runner, worktreePath, projectRoot } = yield* makeDeleteHarness({
+        command: "exit 3",
+      });
+      const result = yield* runner.runOnWorktreeDelete({ projectCwd: projectRoot, worktreePath });
+      assert.deepEqual(result, {
+        status: "finished",
+        scriptName: "Teardown",
+        exitCode: 3,
+        timedOut: false,
+      });
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("stops waiting for a script that outlives the timeout", () =>
+    Effect.gen(function* () {
+      const spawned = yield* Deferred.make<void>();
+      const killed = yield* Deferred.make<void>();
+      const spawner = Layer.succeed(
+        ChildProcessSpawner.ChildProcessSpawner,
+        ChildProcessSpawner.make(() =>
+          Effect.acquireRelease(
+            Deferred.succeed(spawned, undefined).pipe(
+              Effect.as(
+                ChildProcessSpawner.makeHandle({
+                  pid: ChildProcessSpawner.ProcessId(1),
+                  exitCode: Effect.never,
+                  isRunning: Effect.succeed(true),
+                  kill: () => Effect.void,
+                  stdin: Sink.drain,
+                  stdout: Stream.never,
+                  stderr: Stream.never,
+                  all: Stream.never,
+                  getInputFd: () => Sink.drain,
+                  getOutputFd: () => Stream.never,
+                  unref: Effect.succeed(Effect.void),
+                }),
+              ),
+            ),
+            () => Deferred.succeed(killed, undefined),
+          ),
+        ),
+      );
+      const { runner, worktreePath, projectRoot } = yield* makeDeleteHarness({
+        command: "sleep 600",
+        spawner,
+      });
+      const run = yield* runner
+        .runOnWorktreeDelete({ projectCwd: projectRoot, worktreePath })
+        .pipe(Effect.forkChild);
+      yield* Deferred.await(spawned);
+      yield* TestClock.adjust(ProjectSetupScriptRunner.WORKTREE_DELETE_SCRIPT_TIMEOUT);
+      assert.deepEqual(yield* Fiber.join(run), {
+        status: "finished",
+        scriptName: "Teardown",
+        exitCode: null,
+        timedOut: true,
+      });
+      yield* Deferred.await(killed);
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
+  it.live("skips a worktree whose thread a limited link started", () =>
+    Effect.gen(function* () {
+      const { runner, worktreePath, projectRoot, fileSystem } = yield* makeDeleteHarness({
+        command: "touch ran",
+        linked: true,
+      });
+      const result = yield* runner.runOnWorktreeDelete({
+        threadId: "thread-1",
+        projectCwd: projectRoot,
+        worktreePath,
+      });
+      assert.deepEqual(result, { status: "skipped-for-link" });
+      assert.isFalse(yield* fileSystem.exists(`${worktreePath}/ran`));
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 });

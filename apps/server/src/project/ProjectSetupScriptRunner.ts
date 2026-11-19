@@ -5,16 +5,22 @@ import {
   resolveProjectScripts,
   settleProjectScript,
   setupProjectScript,
+  worktreeDeleteProjectScript,
 } from "@t3tools/shared/projectScripts";
+import { collectUint8StreamText } from "@t3tools/provider-core/server/collectStreamText";
 
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+import * as ChildProcess from "effect/process/ChildProcess";
+import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import * as ServerSettings from "../serverSettings.ts";
@@ -76,6 +82,24 @@ export interface ProjectSetupScriptRunnerInput {
   };
 }
 
+export interface ProjectWorktreeDeleteScriptInput {
+  readonly worktreePath: string;
+  readonly projectCwd: string;
+  readonly projectId?: string;
+  readonly threadId?: string;
+}
+
+export type ProjectWorktreeDeleteScriptResult =
+  | { readonly status: "no-script" }
+  | ProjectSetupScriptRunnerResultSkippedForLink
+  | {
+      readonly status: "finished";
+      readonly scriptName: string;
+      /** Null when the script timed out or could not be started. */
+      readonly exitCode: number | null;
+      readonly timedOut: boolean;
+    };
+
 export class ProjectSetupScriptOperationError extends Schema.TaggedError<ProjectSetupScriptOperationError>()(
   "ProjectSetupScriptOperationError",
   {
@@ -128,8 +152,15 @@ export class ProjectSetupScriptRunner extends Context.Service<
     readonly runForThread: (
       input: ProjectSetupScriptRunnerInput,
     ) => Effect.Effect<ProjectSetupScriptRunnerResult, ProjectSetupScriptRunnerError>;
+    /** Runs the project's runOnWorktreeDelete script to completion; failures are logged, never raised. */
+    readonly runOnWorktreeDelete: (
+      input: ProjectWorktreeDeleteScriptInput,
+    ) => Effect.Effect<ProjectWorktreeDeleteScriptResult>;
   }
 >()("t3/project/ProjectSetupScriptRunner") {}
+
+export const WORKTREE_DELETE_SCRIPT_TIMEOUT = "3 minutes";
+const WORKTREE_DELETE_SCRIPT_OUTPUT_MAX_BYTES = 16 * 1024;
 
 /** @public */
 // Random per-run tokens prevent script output from spoofing completion.
@@ -263,6 +294,9 @@ export const make = Effect.gen(function* () {
   const terminalManager = yield* TerminalManager.TerminalManager;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const random = yield* SecureRandom.SecureRandom;
+  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
   const serviceScope = yield* Effect.scope;
 
   const observeTerminalCompletion = Effect.fn("ProjectSetupScriptRunner.observeTerminalCompletion")(
@@ -626,7 +660,89 @@ export const make = Effect.gen(function* () {
     } as const;
   });
 
-  return ProjectSetupScriptRunner.of({ runForThread });
+  const runOnWorktreeDelete: ProjectSetupScriptRunner["Service"]["runOnWorktreeDelete"] = Effect.fn(
+    "ProjectSetupScriptRunner.runOnWorktreeDelete",
+  )(
+    function* (input) {
+      if (input.threadId !== undefined) {
+        const thread = yield* threads.getThreadShell(ThreadId.make(input.threadId));
+        if (thread?.linkOrigin !== undefined && linkOriginIsFenced(thread.linkOrigin))
+          return { status: "skipped-for-link" } as const;
+      }
+      const project = Option.getOrUndefined(
+        input.projectId === undefined
+          ? yield* projects.getByWorkspaceRoot(input.projectCwd, { includeDeleted: true })
+          : yield* projects.getById(ProjectId.make(input.projectId), { includeDeleted: true }),
+      );
+      const worktreePath = path.resolve(input.worktreePath);
+      if (
+        project === undefined ||
+        worktreePath === path.resolve(project.workspaceRoot) ||
+        !(yield* fileSystem.exists(worktreePath))
+      )
+        return { status: "no-script" } as const;
+      const script = worktreeDeleteProjectScript(
+        resolveProjectScripts(yield* serverSettings.getSettings, project),
+      );
+      if (script === null) return { status: "no-script" } as const;
+
+      const run = Effect.gen(function* () {
+        const child = yield* spawner.spawn(
+          ChildProcess.make(script.command, {
+            cwd: worktreePath,
+            env: projectScriptRuntimeEnv({ project: { cwd: project.workspaceRoot }, worktreePath }),
+            extendEnv: true,
+            shell: true,
+            stdin: "ignore",
+            forceKillAfter: "1 second",
+          }),
+        );
+        const output = yield* collectUint8StreamText({
+          stream: child.all,
+          maxBytes: WORKTREE_DELETE_SCRIPT_OUTPUT_MAX_BYTES,
+          truncatedMarker: "\n[output truncated]",
+        });
+        return { exitCode: yield* child.exitCode, output: output.text };
+      }).pipe(Effect.scoped, Effect.timeoutOption(WORKTREE_DELETE_SCRIPT_TIMEOUT));
+      const logContext = {
+        scriptName: script.name,
+        worktreePath,
+        ...(input.threadId === undefined ? {} : { threadId: input.threadId }),
+      };
+      const finished = (exitCode: number | null, timedOut: boolean) =>
+        ({ status: "finished", scriptName: script.name, exitCode, timedOut }) as const;
+      const couldNotRun = (error: unknown) =>
+        Effect.logWarning("worktree delete script could not run", { ...logContext, error }).pipe(
+          Effect.as(null),
+        );
+      const outcome = yield* run.pipe(Effect.catch(couldNotRun), Effect.catchDefect(couldNotRun));
+      if (outcome === null) return finished(null, false);
+      if (Option.isNone(outcome)) {
+        yield* Effect.logWarning("worktree delete script timed out", {
+          ...logContext,
+          timeout: WORKTREE_DELETE_SCRIPT_TIMEOUT,
+        });
+        return finished(null, true);
+      }
+      const { exitCode, output } = outcome.value;
+      if (exitCode !== 0)
+        yield* Effect.logWarning("worktree delete script failed", {
+          ...logContext,
+          exitCode,
+          output,
+        });
+      return finished(exitCode, false);
+    },
+    (effect) => {
+      const unresolved = (error: unknown) =>
+        Effect.logWarning("worktree delete script was not resolved", { error }).pipe(
+          Effect.as({ status: "no-script" } as const),
+        );
+      return effect.pipe(Effect.catch(unresolved), Effect.catchDefect(unresolved));
+    },
+  );
+
+  return ProjectSetupScriptRunner.of({ runForThread, runOnWorktreeDelete });
 });
 
 export const layer = Layer.effect(ProjectSetupScriptRunner, make);

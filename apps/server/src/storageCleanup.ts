@@ -45,6 +45,7 @@ import * as GitManager from "./git/GitManager.ts";
 import * as GitWorkflowService from "./git/GitWorkflowService.ts";
 import * as ProjectStore from "./orchestration-v2/ProjectStore.ts";
 import { scratchFolderRoot } from "./project/ManagedProjectFolders.ts";
+import * as ProjectSetupScriptRunner from "./project/ProjectSetupScriptRunner.ts";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
 import * as ProjectionStore from "./orchestration-v2/ProjectionStore.ts";
 import * as ProviderSessionManager from "./orchestration-v2/ProviderSessionManager.ts";
@@ -327,6 +328,7 @@ const make = Effect.gen(function* () {
   const git = yield* GitVcsDriver.GitVcsDriver;
   const gitManager = yield* GitManager.GitManager;
   const gitWorkflow = yield* GitWorkflowService.GitWorkflowService;
+  const projectScripts = yield* ProjectSetupScriptRunner.ProjectSetupScriptRunner;
   const reconcileBranch = yield* WorktreeBranchSync.makeReconcile;
   const terminals = yield* TerminalManager.TerminalManager;
   const fs = yield* FileSystem.FileSystem;
@@ -1566,6 +1568,12 @@ const make = Effect.gen(function* () {
               if (changes !== null) return keep(changes);
             }
             const repository = yield* worktreeRepository(worktreePath);
+            yield* projectScripts.runOnWorktreeDelete({
+              threadId: thread.id,
+              projectId: thread.projectId,
+              projectCwd: project.workspaceRoot,
+              worktreePath,
+            });
             // Forced removal already discards local files; do not widen its final-check window.
             if (settings.worktreeKeepWhen === "tracked-changes" && !submodules.force)
               yield* cleanupGit(worktreePath, ["clean", "-ffdx"], "git clean");

@@ -231,7 +231,7 @@ function makeHarness(options: HarnessOptions = {}) {
       deleteLocalBranch,
       ...options.git,
     }),
-    Layer.succeed(ProjectSetupScriptRunner.ProjectSetupScriptRunner, {
+    Layer.mock(ProjectSetupScriptRunner.ProjectSetupScriptRunner)({
       runForThread: runSetup,
     }),
     Layer.mock(TextGeneration.TextGeneration)({

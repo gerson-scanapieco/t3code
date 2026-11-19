@@ -1,6 +1,10 @@
 import { shortcutLabelForCommand } from "./keybindings";
 import { describe, expect, it } from "vite-plus/test";
-import { settleProjectScript, setupProjectScript } from "@t3tools/shared/projectScripts";
+import {
+  settleProjectScript,
+  setupProjectScript,
+  worktreeDeleteProjectScript,
+} from "@t3tools/shared/projectScripts";
 
 import {
   commandForProjectScript,
@@ -29,7 +33,7 @@ describe("projectScripts helpers", () => {
     expect(nextProjectScriptId("!!!", [])).toBe("script");
   });
 
-  it("resolves primary, setup, and settle scripts", () => {
+  it("resolves primary, setup, settle, and delete scripts", () => {
     const scripts = [
       {
         id: "setup",
@@ -47,6 +51,14 @@ describe("projectScripts helpers", () => {
         runOnSettle: true,
       },
       {
+        id: "teardown",
+        name: "Teardown",
+        command: "./teardown",
+        icon: "configure" as const,
+        runOnWorktreeCreate: false,
+        runOnWorktreeDelete: true,
+      },
+      {
         id: "test",
         name: "Test",
         command: "bun test",
@@ -58,10 +70,12 @@ describe("projectScripts helpers", () => {
     expect(primaryProjectScript(scripts)?.id).toBe("test");
     expect(setupProjectScript(scripts)?.id).toBe("setup");
     expect(settleProjectScript(scripts)?.id).toBe("clean");
+    expect(worktreeDeleteProjectScript(scripts)?.id).toBe("teardown");
     expect(primaryProjectScript(scripts.filter((script) => script.id === "clean"))).toBeNull();
+    expect(primaryProjectScript(scripts.filter((script) => script.id === "teardown"))).toBeNull();
   });
 
-  it("moves the setup and settle roles to the script that claims them", () => {
+  it("moves the setup, settle, and delete roles to the script that claims them", () => {
     const input = {
       name: "Next",
       command: "true",
@@ -77,6 +91,7 @@ describe("projectScripts helpers", () => {
       icon: "play" as const,
       runOnWorktreeCreate: true,
       runOnSettle: true,
+      runOnWorktreeDelete: true,
     };
 
     expect(
@@ -85,6 +100,14 @@ describe("projectScripts helpers", () => {
     expect(
       releaseClaimedRoles(holder, { ...input, runOnWorktreeCreate: true, runOnSettle: false }),
     ).toMatchObject({ runOnWorktreeCreate: false, runOnSettle: true });
+    expect(
+      releaseClaimedRoles(holder, {
+        ...input,
+        runOnWorktreeCreate: false,
+        runOnSettle: false,
+        runOnWorktreeDelete: true,
+      }),
+    ).toMatchObject({ runOnWorktreeCreate: true, runOnSettle: true, runOnWorktreeDelete: false });
     expect(
       releaseClaimedRoles(holder, { ...input, runOnWorktreeCreate: false, runOnSettle: false }),
     ).toBe(holder);

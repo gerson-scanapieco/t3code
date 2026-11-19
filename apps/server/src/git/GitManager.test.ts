@@ -633,7 +633,10 @@ function makeManager(input?: {
   sourceControlProvider?: SourceControlProvider["Service"];
   textGeneration?: Partial<FakeGitTextGeneration>;
   serverSettings?: Parameters<typeof ServerSettings.layerTest>[0];
-  setupScriptRunner?: ProjectSetupScriptRunner.ProjectSetupScriptRunner["Service"];
+  setupScriptRunner?: Pick<
+    ProjectSetupScriptRunner.ProjectSetupScriptRunner["Service"],
+    "runForThread"
+  >;
   gitConfigReads?: string[];
   gitCommands?: string[];
   gitSpawnGate?: {
@@ -741,8 +744,7 @@ function makeManager(input?: {
     Layer.mock(ProviderRegistry.ProviderRegistry)({
       getProviders: Effect.succeed([]),
     }),
-    Layer.succeed(
-      ProjectSetupScriptRunner.ProjectSetupScriptRunner,
+    Layer.mock(ProjectSetupScriptRunner.ProjectSetupScriptRunner)(
       input?.setupScriptRunner ?? {
         runForThread: () => Effect.succeed({ status: "no-script" as const }),
       },
@@ -808,6 +810,7 @@ it.layer(layerGitManagerTest)("GitManager", (it) => {
             Layer.provide(
               GitWorkflowService.layer.pipe(
                 Layer.provide(Layer.succeed(GitManager.GitManager, manager)),
+                Layer.provide(Layer.mock(ProjectSetupScriptRunner.ProjectSetupScriptRunner)({})),
                 Layer.provide(
                   VcsDriverRegistry.layer.pipe(
                     Layer.provide(VcsProjectConfig.layer),
@@ -5259,6 +5262,7 @@ it.layer(layerGitManagerTest)("GitManager", (it) => {
         const events: string[] = [];
         const workflows = yield* Effect.forEach([0, 1], () =>
           GitWorkflowService.make.pipe(
+            Effect.provide(Layer.mock(ProjectSetupScriptRunner.ProjectSetupScriptRunner)({})),
             // Cache the real filesystem result so startImmediately reaches lease acquisition.
             Effect.provideService(FileSystem.FileSystem, {
               ...fileSystem,
