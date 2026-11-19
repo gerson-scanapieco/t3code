@@ -5153,7 +5153,6 @@
   "ae49da4c03c3c8e2": "Connecté. Les requêtes vers {host} utilisent la limite de débit plus élevée de l’app, dans les dépôts où l’app est installée.",
   "655aaab297ef891e": "Installer sur une organisation",
   "1f01e7c3e6e68c8b": "Saisissez {code}",
-  "59294272fdff20ed": "Utilise le t3.json du dépôt, ou le dossier des worktrees de T3.",
   "8f4ec67932709a04": "Nom de branche et ID",
   "bda82f362317e889": "Nomme chaque dossier d’après sa branche, avec un court ID unique.",
   "01d69e43c7eba332": "Nom de branche",

@@ -509,20 +509,21 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
                     />
                   ))}
                 </SettingsSection>
-                <WorktreeLocationSettings
-                  key={targetsKey}
-                  location={reference.settings.worktreeLocation}
-                  mixed={isMixed("worktreeLocation")}
-                  inheritable={!projectSelected}
-                  disabled={disabledFor("worktreeLocation")}
-                  footer={managed("worktreeLocation")}
-                  trailing={
-                    pendingWrites === 0 && isMixed("worktreeLocation") ? (
-                      <MixedValuesLabel projectSelected={projectSelected} />
-                    ) : null
-                  }
-                  onChange={write}
-                />
+                {projectSelected ? (
+                  <WorktreeLocationSettings
+                    key={targetsKey}
+                    location={reference.settings.worktreeLocation}
+                    mixed={isMixed("worktreeLocation")}
+                    disabled={disabledFor("worktreeLocation")}
+                    footer={managed("worktreeLocation")}
+                    trailing={
+                      pendingWrites === 0 && isMixed("worktreeLocation") ? (
+                        <MixedValuesLabel projectSelected={projectSelected} />
+                      ) : null
+                    }
+                    onChange={write}
+                  />
+                ) : null}
                 <BranchNamingSettings
                   key={targetsKey}
                   mode={uniform("branchNamingMode")}

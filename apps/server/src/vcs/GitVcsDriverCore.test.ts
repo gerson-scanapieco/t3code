@@ -7227,6 +7227,50 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
       }),
     );
 
+    it.effect("keeps a t3.json worktree location inside the repository's folder", () =>
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const pathService = yield* Path.Path;
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+        const cwd = yield* makeTmpDir();
+        const { initialBranch } = yield* initRepoWithCommit(cwd);
+        const outside = yield* makeTmpDir();
+        yield* fileSystem.symlink(outside, pathService.join(cwd, "escape"));
+        const createWith = (directory: string, newRefName: string) =>
+          Effect.gen(function* () {
+            yield* writeTextFile(
+              cwd,
+              "t3.json",
+              JSON.stringify({ worktreeLocation: { directory, naming: "branch" } }),
+            );
+            yield* git(cwd, ["add", "-A"]);
+            yield* git(cwd, ["commit", "-m", directory]);
+            return yield* driver.createWorktree({
+              cwd,
+              path: null,
+              refName: initialBranch,
+              newRefName,
+            });
+          });
+
+        for (const [directory, newRefName] of [
+          ["../outside", "feature/up"],
+          ["~/t3-worktrees", "feature/home"],
+          ["escape", "feature/link"],
+        ] as const) {
+          const error = yield* createWith(directory, newRefName).pipe(Effect.flip);
+          assert.match(error.message, /leaves the repository's folder/);
+        }
+        assert.deepEqual(yield* fileSystem.readDirectory(outside), []);
+
+        const inside = yield* createWith(".worktrees", "feature/inside");
+        assert.equal(
+          yield* fileSystem.realPath(inside.worktree.path),
+          pathService.join(yield* fileSystem.realPath(cwd), ".worktrees", "feature-inside"),
+        );
+      }),
+    );
+
     it.effect(
       "keeps generated paths distinct across branch spellings and equal repository basenames",
       () =>

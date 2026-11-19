@@ -111,7 +111,7 @@ export const T3ProjectFile = Schema.Struct({
   worktreeLocation: Schema.optionalKey(
     WorktreeLocation.annotate({
       description:
-        'Where new worktrees for this repository go. "directory" is the folder that holds them; a relative path resolves against the folder containing the repository\'s Git directory, which is the checkout itself for an ordinary clone and the container folder for a bare repository kept as <container>/.bare, so "." places worktrees beside the others there. An empty "directory" uses T3 Code\'s worktree folder. "naming" is "branch" for a folder named after the branch ("/" becomes "-") or "hashed" (the default) for the branch name shortened plus a unique ID. Existing folders are never reused; a "-2" style suffix is added instead. A project or environment setting in T3 Code overrides this.',
+        'Where new worktrees for this repository go. "directory" is the folder that holds them; a relative path resolves against the folder containing the repository\'s Git directory, which is the checkout itself for an ordinary clone and the container folder for a bare repository kept as <container>/.bare, so "." places worktrees beside the others there. It must stay inside that folder: absolute, "~" and ".." paths that leave it are refused. An empty "directory" uses T3 Code\'s worktree folder. "naming" is "branch" for a folder named after the branch ("/" becomes "-") or "hashed" (the default) for the branch name shortened plus a unique ID. Existing folders are never reused; a "-2" style suffix is added instead. A project or environment setting in T3 Code overrides this.',
     }),
   ),
   worktreeSparsePatternsPath: Schema.optionalKey(

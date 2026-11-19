@@ -5160,7 +5160,6 @@
   "ae49da4c03c3c8e2": "Signed in. {host} requests use the app's higher rate limit, in repositories where the app is installed.",
   "655aaab297ef891e": "Install on an organization",
   "1f01e7c3e6e68c8b": "Enter {code}",
-  "59294272fdff20ed": "Use the repository's t3.json, or the T3 worktree folder.",
   "8f4ec67932709a04": "Branch name and ID",
   "bda82f362317e889": "Name each folder after its branch, plus a short unique ID.",
   "01d69e43c7eba332": "Branch name",

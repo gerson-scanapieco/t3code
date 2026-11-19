@@ -5,6 +5,7 @@ import * as Layer from "effect/Layer";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 
 import * as ServerConfig from "../config.ts";
 import * as VcsProcess from "../vcs/VcsProcess.ts";
@@ -13,6 +14,7 @@ import * as GitWorkflowService from "./GitWorkflowService.ts";
 import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
+import { createdWorktreeRecordPath } from "../worktreesDirectory.ts";
 
 const workflowLayer = (
   projectScripts: Layer.Layer<ProjectSetupScriptRunner.ProjectSetupScriptRunner>,
@@ -85,9 +87,15 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("GitWorkflowServi
       ]) {
         yield* driver.execute({ operation: "test.setupRepo", cwd, args });
       }
+      const { stateDir } = yield* ServerConfig.ServerConfig;
+      const pathService = yield* Path.Path;
+      const record = createdWorktreeRecordPath(stateDir, worktreePath, pathService);
+      yield* fileSystem.makeDirectory(pathService.dirname(record), { recursive: true });
+      yield* fileSystem.writeFileString(record, worktreePath);
       yield* workflow.removeWorktree({ cwd, path: worktreePath, force: true });
       assert.deepEqual(runs, [{ input: { projectCwd: cwd, worktreePath }, worktreeExisted: true }]);
       assert.isFalse(yield* fileSystem.exists(worktreePath));
+      assert.isFalse(yield* fileSystem.exists(record));
     }).pipe(
       Effect.scoped,
       Effect.provide(
