@@ -2619,7 +2619,38 @@
   ],
   "ac049cf1be6726fc": "Befehl",
   "7de9d2f24736adbc": "Vorschau-URL (optional)",
-  "70b6c86afbdf0aad": "Diese URL in der App-Vorschau öffnen, wenn diese Aktion läuft.",
+  "53204f48808940b1": [
+    "Diese URL in der App-Vorschau öffnen, wenn diese Aktion läuft. Mit",
+    " ",
+    {
+      "t": "code",
+      "i": 1,
+      "c": {
+        "i": 2,
+        "k": "_gt_value_2",
+        "v": "v"
+      }
+    },
+    " ",
+    "setzt du eine Variable aus ",
+    {
+      "t": "code",
+      "i": 3,
+      "c": ".env.local"
+    },
+    " im Worktree des Threads oder aus der Umgebung der Aktion ein, zum Beispiel",
+    " ",
+    {
+      "t": "code",
+      "i": 4,
+      "c": {
+        "i": 5,
+        "k": "_gt_value_5",
+        "v": "v"
+      }
+    },
+    "."
+  ],
   "77653142b03d1f67": "Beim Erstellen eines Worktrees automatisch ausführen",
   "14b0d0551eb4b4dc": "Auf den Abschluss warten, bevor der Agent startet",
   "7f8696ec0b38b0db": "Im Worktree des Threads ausführen, wenn der Thread erledigt wird",
@@ -4561,6 +4592,7 @@
   "fb8b1585e3724cda": "Manuelles Update erforderlich",
   "72d19a2106b69467": "Skript „{name}“ konnte nicht ausgeführt werden.",
   "703f773d7151e52f": "Vorschau konnte nicht geöffnet werden",
+  "9ef9f7aa49b2e24d": "Die Vorschau-URL verwendet {variables}, das weder in {file} noch in der Umgebung der Aktion gesetzt ist.",
   "6cfd50d2497b66bd": "Codeblock im Chat",
   "a5db77c29b7675b0": "Diese Frage kann keine Anhänge annehmen.",
   "ebb9d93e29740cd2": "Du kannst bis zu {max} Dateien pro Nachricht anhängen.",

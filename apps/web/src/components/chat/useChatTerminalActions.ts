@@ -15,11 +15,17 @@ import {
   AuthTerminalReadScope,
   AuthTerminalOperateScope,
   type EnvironmentId,
+  PreviewActionUrlVariablesMissingError,
   type ProjectScript,
   type ScopedThreadRef,
   type ThreadId,
 } from "@t3tools/contracts";
-import { projectScriptTerminalInput } from "@t3tools/shared/projectScripts";
+import {
+  projectScriptRuntimeEnv,
+  projectScriptTerminalInput,
+} from "@t3tools/shared/projectScripts";
+import { hasPreviewUrlPlaceholders } from "@t3tools/shared/previewUrlTemplate";
+import * as Schema from "effect/Schema";
 import { type SetStateAction } from "react";
 import {
   isAtomCommandInterrupted,
@@ -55,6 +61,7 @@ import { previewEnvironment } from "../../state/preview";
 import { readEnvironmentScope } from "../../state/session";
 import { useAtomCommand } from "../../state/use-atom-command";
 import type { ChatShortcutCommands } from "./useChatShortcuts";
+const isPreviewUrlVariablesMissing = Schema.is(PreviewActionUrlVariablesMissingError);
 const SCRIPT_TERMINAL_COLS = 120;
 const SCRIPT_TERMINAL_ROWS = 30;
 
@@ -107,6 +114,9 @@ export function useChatTerminalActions(input: ChatTerminalActionsInput) {
     setThreadError,
   } = input;
   const openPreview = useAtomCommand(previewEnvironment.open, { reportFailure: false });
+  const resolvePreviewActionUrl = useAtomCommand(previewEnvironment.resolveActionUrl, {
+    reportFailure: false,
+  });
 
   const hasTerminalWriteAccess = () =>
     readEnvironmentScope(environmentId, AuthTerminalOperateScope);
@@ -304,20 +314,53 @@ export function useChatTerminalActions(input: ChatTerminalActionsInput) {
       script.previewUrl &&
       isPreviewAvailableFor(activeThreadRef.environmentId)
     ) {
-      const previewResult = await openUrlInPreview({
-        threadRef: activeThreadRef,
-        url: resolveDiscoveredServerUrl(activeThreadRef.environmentId, script.previewUrl),
-        openPreview,
-      });
-      if (previewResult._tag === "Failure" && !isAtomCommandInterrupted(previewResult)) {
-        const error = squashAtomCommandFailure(previewResult);
+      const showPreviewError = (description: string) =>
         toastManager.add(
           stackedThreadToast({
             type: "error",
             title: m(msg("Could not open preview")),
-            description: thrownErrorMessage(error, m) ?? m(msg("An unexpected error occurred.")),
+            description,
           }),
         );
+      let previewUrl = script.previewUrl;
+      if (hasPreviewUrlPlaceholders(previewUrl)) {
+        const resolved = await resolvePreviewActionUrl({
+          environmentId: activeThreadRef.environmentId,
+          input: {
+            cwd: targetCwd,
+            url: previewUrl,
+            env: projectScriptRuntimeEnv({
+              project: { cwd: activeProject.workspaceRoot },
+              worktreePath: targetWorktreePath,
+              ...(options?.env ? { extraEnv: options.env } : {}),
+            }),
+          },
+        });
+        if (resolved._tag === "Failure") {
+          if (isAtomCommandInterrupted(resolved)) return;
+          const error = squashAtomCommandFailure(resolved);
+          showPreviewError(
+            isPreviewUrlVariablesMissing(error)
+              ? m(
+                  msg(
+                    "The preview URL uses {variables}, which is not set in {file} or the action's environment.",
+                    { variables: error.variables.join(", "), file: error.envFilePath },
+                  ),
+                )
+              : (thrownErrorMessage(error, m) ?? m(msg("An unexpected error occurred."))),
+          );
+          return;
+        }
+        previewUrl = resolved.value.url;
+      }
+      const previewResult = await openUrlInPreview({
+        threadRef: activeThreadRef,
+        url: resolveDiscoveredServerUrl(activeThreadRef.environmentId, previewUrl),
+        openPreview,
+      });
+      if (previewResult._tag === "Failure" && !isAtomCommandInterrupted(previewResult)) {
+        const error = squashAtomCommandFailure(previewResult);
+        showPreviewError(thrownErrorMessage(error, m) ?? m(msg("An unexpected error occurred.")));
       }
     }
   };

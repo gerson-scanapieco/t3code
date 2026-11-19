@@ -185,6 +185,13 @@ on each selected environment, and reset returns to the environment's shared list
 `t3.json` actions can be imported there. When a project has several checkouts on one environment,
 choose one in the scope line at the top to see or change only that checkout's settings.
 
+An action's **Preview URL** opens in the desktop app's browser when the action runs. It can use
+`${NAME}` placeholders, filled in when the action starts from `.env.local` in the thread's worktree
+(or the project root), then from the action's environment. For example, with a worktree setup
+script that writes a free port to `.env.local`, `http://127.0.0.1:${PORT}` opens the right port for
+each worktree. If a variable is not set, the preview stays closed and T3 Code names the missing
+variable.
+
 Settings a repository can also declare in `t3.json`, such as the workspace for new threads,
 resolve in one order: a project override, then the environment setting, then `t3.json`, then the
 built-in default. Leave a setting on **Inherit** to let the next tier decide.
