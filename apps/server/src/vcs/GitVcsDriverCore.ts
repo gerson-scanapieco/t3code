@@ -5181,6 +5181,28 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     return name === "" || name.startsWith(".") ? path.basename(path.dirname(commonDir)) : name;
   };
 
+  // Compares physical paths so a symlink inside the base cannot point outside it.
+  const isInsideRealDirectory = Effect.fn("GitVcsDriver.isInsideRealDirectory")(function* (
+    candidate: string,
+    directory: string,
+  ) {
+    let existing = candidate;
+    while (!(yield* fileSystem.exists(existing).pipe(Effect.orElseSucceed(() => false)))) {
+      const parent = path.dirname(existing);
+      if (parent === existing) return false;
+      existing = parent;
+    }
+    const realCandidate = path.join(
+      yield* fileSystem.realPath(existing).pipe(Effect.orElseSucceed(() => existing)),
+      path.relative(existing, candidate),
+    );
+    const realDirectory = yield* fileSystem
+      .realPath(directory)
+      .pipe(Effect.orElseSucceed(() => directory));
+    const relative = path.relative(realDirectory, realCandidate);
+    return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+  });
+
   const createWorktree: GitVcsDriver.GitVcsDriver["Service"]["createWorktree"] = Effect.fn(
     "createWorktree",
   )(function* (input, options) {
@@ -5199,6 +5221,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
         options?.worktreeLocation ?? null,
         projectFile,
       );
+      const repositoryBase = commonDir === null ? path.resolve(input.cwd) : path.dirname(commonDir);
       const environmentRoot =
         location.value.directory === ""
           ? resolveWorktreesDirectory(options?.worktreesDirectory ?? "", worktreesDir, path, home)
@@ -5207,12 +5230,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
         location.value.directory === ""
           ? environmentRoot &&
             path.join(environmentRoot, repositoryFolderName(input.cwd, commonDir))
-          : resolveProjectWorktreesDirectory(
-              location.value.directory,
-              commonDir === null ? path.resolve(input.cwd) : path.dirname(commonDir),
-              path,
-              home,
-            );
+          : resolveProjectWorktreesDirectory(location.value.directory, repositoryBase, path, home);
       if (parentDir === null) {
         return yield* new GitCommandError({
           operation: "GitVcsDriver.createWorktree",
@@ -5222,6 +5240,18 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
             location.value.directory === ""
               ? `The worktree location "${options?.worktreesDirectory}" must be an absolute folder on this machine, not a drive root. Change it in Settings → Worktrees.`
               : `The worktree location "${location.value.directory}" must be a folder on this machine, not a drive root. Change it in the project's Worktrees settings${location.source === "t3.json" ? " or in t3.json" : ""}.`,
+        });
+      }
+      // A repository's own t3.json must not place checkouts elsewhere on the machine.
+      if (
+        location.source === "t3.json" &&
+        !(yield* isInsideRealDirectory(parentDir, repositoryBase))
+      ) {
+        return yield* new GitCommandError({
+          operation: "GitVcsDriver.createWorktree",
+          command: "git worktree add",
+          cwd: input.cwd,
+          detail: `The t3.json worktree location "${location.value.directory}" leaves the repository's folder. t3.json can only use a folder inside it; set other locations in the project's Worktrees settings.`,
         });
       }
       let folderName: string;

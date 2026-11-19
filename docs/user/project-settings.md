@@ -224,13 +224,15 @@ A project can choose its own folder instead: select the project in **Settings â†
 **Worktree location**, or check it into `t3.json`:
 
 ```json
-{ "worktreeLocation": { "directory": "../my-app-worktrees", "naming": "branch" } }
+{ "worktreeLocation": { "directory": ".worktrees", "naming": "branch" } }
 ```
 
 A relative `directory` starts from the folder that holds the repository's Git data. For an
 ordinary clone that is the checkout itself. For a bare repository kept as `my-app/.bare` with its
 worktrees beside it, such as `my-app/main`, it is `my-app`, so `"."` puts new worktrees next to the
-others. Add one of those worktrees, such as `my-app/main`, as the project; its threads can use the
+others. A `t3.json` location must stay inside that folder, so a repository cannot place checkouts
+elsewhere on your machine; set an outside folder, such as `../my-app-worktrees` or an absolute path,
+in the project's Worktrees settings instead. Add one of those worktrees, such as `my-app/main`, as the project; its threads can use the
 other worktrees too. `"naming": "branch"` names each folder after its branch (`feature/login`
 becomes `feature-login`); the default, `"hashed"`, adds a short unique ID. A folder that already
 exists is never reused: the new worktree gets a `-2` style suffix. Cleanup removes worktrees in a

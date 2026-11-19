@@ -58,6 +58,7 @@ import * as Settings from "./serverSettings.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
 import {
   isFilesystemRoot,
+  makeForgetCreatedWorktree,
   makeIsCreatedWorktree,
   managedWorktreesDirectories,
 } from "./worktreesDirectory.ts";
@@ -338,6 +339,7 @@ const make = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const isCreatedWorktree = yield* makeIsCreatedWorktree;
+  const forgetCreatedWorktree = yield* makeForgetCreatedWorktree;
   const liveTerminals = new Map<string, Map<string, TerminalSummary>>();
   const orphanSizes = new Map<string, number | null>();
   const noteTerminal = (terminal: TerminalSummary) => {
@@ -1618,6 +1620,7 @@ const make = Effect.gen(function* () {
               execute: git.execute,
               run: (args) => cleanupGit(repository, [...args], "git worktree remove"),
             });
+            if (deleted) yield* forgetCreatedWorktree(worktreePath);
             entries.push({ ...entry, outcome: "removed", reason: sentence(removalReason), bytes });
             yield* gitManager.invalidateStatus(project.workspaceRoot);
             // Preserve branch/path so ProviderTurnStartService can recreate the checkout on resume.

@@ -80,6 +80,17 @@ export const makeIsCreatedWorktree = Effect.gen(function* () {
       .pipe(Effect.orElseSucceed(() => false));
 });
 
+/** Once a worktree goes with its thread, nothing can restore it, and a later checkout there is the user's. */
+export const makeForgetCreatedWorktree = Effect.gen(function* () {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const { stateDir } = yield* ServerConfig.ServerConfig;
+  return (worktreePath: string) =>
+    fileSystem
+      .remove(createdWorktreeRecordPath(stateDir, worktreePath, path), { force: true })
+      .pipe(Effect.ignore);
+});
+
 export function managedWorktreesDirectories(
   settings: {
     readonly worktreesDirectory: string;

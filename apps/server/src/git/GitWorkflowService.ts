@@ -35,6 +35,7 @@ import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.t
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 import { withWorkspaceLease } from "../workspace/workspaceLease.ts";
+import { makeForgetCreatedWorktree } from "../worktreesDirectory.ts";
 
 export class GitWorkflowService extends Context.Service<
   GitWorkflowService,
@@ -206,6 +207,7 @@ export const make = Effect.gen(function* () {
   const gitManager = yield* GitManager.GitManager;
   const fileSystem = yield* FileSystem.FileSystem;
   const projectScripts = yield* ProjectSetupScriptRunner.ProjectSetupScriptRunner;
+  const forgetCreatedWorktree = yield* makeForgetCreatedWorktree;
 
   // Nested projects and path aliases must share the checkout's branch-mutation lease.
   const withCheckoutLease = <A, E, R>(rootPath: string, effect: Effect.Effect<A, E, R>) =>
@@ -555,6 +557,7 @@ export const make = Effect.gen(function* () {
                 ),
         }),
         Effect.andThen(git.removeWorktree(input)),
+        Effect.andThen(forgetCreatedWorktree(input.path)),
       );
     }),
     pruneWorktrees: Effect.fn("GitWorkflowService.pruneWorktrees")(function (input) {
