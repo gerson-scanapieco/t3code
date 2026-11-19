@@ -1110,6 +1110,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         : []),
       { id: "copy-thread", title: gt("Copy thread"), image: "text.bubble" },
       { id: "copy-thread-id", title: gt("Copy thread ID"), image: "doc.on.doc" },
+      { id: "thread-summary", title: gt("Thread summary"), image: "doc.text" },
       ...(canShareWithGuest
         ? [{ id: "share-guest", title: gt("Share with guest"), image: "person.badge.plus" }]
         : []),
@@ -1241,6 +1242,12 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       }
       if (nativeEvent.event === "copy-thread-id") {
         copyTextWithHaptic(thread.id, { target: "thread-id" });
+      }
+      if (nativeEvent.event === "thread-summary") {
+        navigation.navigate("ThreadSummary", {
+          environmentId: thread.environmentId,
+          threadId: thread.id,
+        });
       }
       if (nativeEvent.event === "share-guest") {
         navigation.navigate("ThreadGuestShare", {
