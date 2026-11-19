@@ -1,7 +1,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
-import { DesktopSnapShotId } from "@t3tools/contracts";
+import { DEFAULT_CLIENT_SETTINGS, DesktopSnapShotId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
@@ -164,9 +164,13 @@ function makeFakeBrowserWindow() {
   };
 }
 
-const layerDesktopClientSettings = Layer.mock(DesktopClientSettings.DesktopClientSettings)({
-  get: Effect.succeedNone,
-});
+const layerDesktopClientSettings = (windowOpacity?: number) =>
+  Layer.mock(DesktopClientSettings.DesktopClientSettings)({
+    get:
+      windowOpacity === undefined
+        ? Effect.succeedNone
+        : Effect.succeedSome({ ...DEFAULT_CLIENT_SETTINGS, windowOpacity }),
+  });
 
 const layerElectronApp = Layer.mock(ElectronApp.ElectronApp)({
   quit: Effect.void,
@@ -233,6 +237,7 @@ function layerTest(input: {
   readonly mainWindow: Ref.Ref<Option.Option<Electron.BrowserWindow>>;
   readonly createdWindowOptions?: Electron.BrowserWindowConstructorOptions[];
   readonly desktopSettings?: DesktopAppSettings.DesktopSettings;
+  readonly windowOpacity?: number;
   readonly mainWindowBoundsUpdates?: DesktopAppSettings.DesktopWindowBounds[];
   readonly mainWindowMaximizedUpdates?: boolean[];
   readonly beforeMainWindowBoundsUpdate?: (
@@ -337,7 +342,7 @@ function layerTest(input: {
           ? layerDesktopEnvironment
           : layerDesktopEnvironmentFor(input.platform),
         layerDesktopAppSettings,
-        layerDesktopClientSettings,
+        layerDesktopClientSettings(input.windowOpacity),
         layerDesktopServerExposure,
         DesktopState.layer,
         layerElectronApp,
@@ -459,7 +464,7 @@ const makeSplashScenario = (createOutcomes: readonly (Electron.BrowserWindow | n
           }),
           layerDesktopEnvironment,
           DesktopAppSettings.layerTest(),
-          layerDesktopClientSettings,
+          layerDesktopClientSettings(),
           layerDesktopServerExposure,
           DesktopState.layer,
           layerElectronApp,
@@ -1306,6 +1311,34 @@ describe("DesktopWindow", () => {
     assert.deepEqual(resolve("win32", 85), opaque);
     assert.deepEqual(resolve("linux", 50), opaque);
   });
+
+  it.effect("creates the main window translucent from the persisted window opacity", () =>
+    Effect.gen(function* () {
+      const main = makeFakeBrowserWindow();
+      const createdWindowOptions: Electron.BrowserWindowConstructorOptions[] = [];
+      const layer = layerTest({
+        window: main.window,
+        createCount: yield* Ref.make(0),
+        mainWindow: yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none()),
+        createdWindowOptions,
+        platform: "darwin",
+        windowOpacity: 85,
+      });
+
+      yield* Effect.gen(function* () {
+        const desktopWindow = yield* DesktopWindow.DesktopWindow;
+        yield* desktopWindow.createMain;
+        yield* desktopWindow.setWindowOpacity(85);
+      }).pipe(Effect.provide(layer));
+
+      assert.deepInclude(createdWindowOptions[0], {
+        backgroundColor: "#00000000",
+        vibrancy: "under-window",
+        visualEffectState: "active",
+      });
+      assert.lengthOf(vi.mocked(main.window.setVibrancy).mock.calls, 0);
+    }),
+  );
 
   it.effect("applies window opacity live and keeps it through appearance syncs", () =>
     Effect.gen(function* () {
