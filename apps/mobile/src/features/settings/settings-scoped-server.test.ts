@@ -9,6 +9,7 @@ import { describe, expect, it } from "vite-plus/test";
 import type { SettingsTarget } from "./settings-environment-filter";
 import {
   managedSettingReason,
+  mobileSettingIsMixed,
   planMobileScopedSettingsClear,
   planMobileScopedSettingsPatch,
   resolveMobileSettingsTargets,
@@ -54,6 +55,26 @@ describe("mobile usage-limit settings across environments", () => {
       expect(uniformMobileSetting([], key)).toBeNull();
     },
   );
+
+  it("compares object settings by value, not identity", () => {
+    const location = (naming: "hashed" | "branch") => ({ directory: ".", naming });
+    const targets = resolveMobileSettingsTargets(
+      [
+        environment(firstId, { ...DEFAULT_SERVER_SETTINGS, worktreeLocation: location("branch") }),
+        environment(secondId, { ...DEFAULT_SERVER_SETTINGS, worktreeLocation: location("branch") }),
+      ],
+      null,
+    );
+    expect(mobileSettingIsMixed(targets, "worktreeLocation")).toBe(false);
+    expect(uniformMobileSetting(targets, "worktreeLocation")).toEqual(location("branch"));
+
+    const differing = [
+      targets[0]!,
+      { settings: { ...DEFAULT_SERVER_SETTINGS, worktreeLocation: location("hashed") } },
+    ];
+    expect(mobileSettingIsMixed(differing, "worktreeLocation")).toBe(true);
+    expect(uniformMobileSetting(differing, "worktreeLocation")).toBeNull();
+  });
 });
 
 function environment(environmentId: EnvironmentId, settings: ServerSettings): SettingsTarget {
@@ -111,14 +132,23 @@ describe("mobile project settings scope", () => {
     const settings: ServerSettings = {
       ...DEFAULT_SERVER_SETTINGS,
       projectSettingsOverrides: {
-        [firstProject]: { defaultThreadEnvMode: "worktree", defaultAutoPull: true },
+        [firstProject]: {
+          defaultThreadEnvMode: "worktree",
+          defaultAutoPull: true,
+          worktreeLocation: { directory: ".", naming: "branch" },
+        },
       },
     };
     const targets = resolveMobileSettingsTargets(
       [environment(firstId, settings)],
       [{ environmentId: firstId, id: firstProject }],
     );
-    expect(planMobileScopedSettingsPatch(targets, true, { defaultThreadEnvMode: null })).toEqual([
+    expect(
+      planMobileScopedSettingsPatch(targets, true, {
+        defaultThreadEnvMode: null,
+        worktreeLocation: null,
+      }),
+    ).toEqual([
       {
         environmentId: firstId,
         patch: { projectSettingsOverrides: { [firstProject]: { defaultAutoPull: true } } },
@@ -132,6 +162,7 @@ describe("mobile project settings scope", () => {
             [firstProject]: {
               defaultThreadEnvMode: "worktree",
               defaultAutoPull: true,
+              worktreeLocation: { directory: ".", naming: "branch" },
               defaultModelSelection: null,
             },
           },

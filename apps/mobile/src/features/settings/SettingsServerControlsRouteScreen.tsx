@@ -25,6 +25,7 @@ import {
 import { SettingsScreen } from "./components/SettingsScreen";
 import { useSettingsEnvironmentMenu } from "./components/SettingsEnvironmentFilterHeader";
 import { BranchNamingSettings } from "./components/BranchNamingSettings";
+import { WorktreeLocationSettings } from "./components/WorktreeLocationSettings";
 import { DatabaseStorageNotice } from "./components/DatabaseStorageNotice";
 import { ListChoiceRow as SettingsChoiceRow } from "../../components/ui/ListChoiceRow";
 import { SettingsSection } from "./components/SettingsSection";
@@ -36,6 +37,7 @@ import { useSettingsEnvironmentFilter } from "./settings-environment-filter";
 import { useSettingsWriter } from "./useSettingsWriter";
 import {
   managedSettingReason,
+  mobileSettingIsMixed,
   planMobileScopedSettingsClear,
   planMobileScopedSettingsPatch,
   resolveMobileSettingsTargets,
@@ -68,6 +70,7 @@ const PAGE_PROJECT_KEYS: Record<SettingsPage, readonly ProjectScopedServerSettin
   worktrees: [
     "newWorktreesStartFromOrigin",
     "worktreeSubmodules",
+    "worktreeLocation",
     "branchNamingMode",
     "branchNamePrefix",
     "branchNameInstructions",
@@ -217,8 +220,7 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
     uniformMobileSetting(displayTargets, key);
   // `uniform` folds a real null into "mixed"; nullable keys need the distinction.
   const isMixed = (key: keyof ServerSettings) =>
-    reference === null ||
-    displayTargets.some((entry) => entry.settings[key] !== reference.settings[key]);
+    reference === null || mobileSettingIsMixed(displayTargets, key);
   const writeSettings = useSettingsWriter();
   const write = (patch: ServerSettingsPatch) => {
     if (writeInFlight.current) {
@@ -507,6 +509,20 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
                     />
                   ))}
                 </SettingsSection>
+                <WorktreeLocationSettings
+                  key={targetsKey}
+                  location={reference.settings.worktreeLocation}
+                  mixed={isMixed("worktreeLocation")}
+                  inheritable={!projectSelected}
+                  disabled={disabledFor("worktreeLocation")}
+                  footer={managed("worktreeLocation")}
+                  trailing={
+                    pendingWrites === 0 && isMixed("worktreeLocation") ? (
+                      <MixedValuesLabel projectSelected={projectSelected} />
+                    ) : null
+                  }
+                  onChange={write}
+                />
                 <BranchNamingSettings
                   key={targetsKey}
                   mode={uniform("branchNamingMode")}

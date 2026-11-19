@@ -13,6 +13,7 @@ import {
   resolveProjectSettings,
 } from "@t3tools/shared/projectSettings";
 
+import * as Equal from "effect/Equal";
 import { msg } from "gt-react-native";
 
 import { m, type MessageResolver } from "../../i18n/messages";
@@ -114,8 +115,18 @@ export function uniformMobileSetting<K extends keyof ServerSettings>(
 ): ServerSettings[K] | null {
   const reference = targets[0];
   if (!reference) return null;
-  const value = reference.settings[key];
-  return targets.every((target) => target.settings[key] === value) ? value : null;
+  return mobileSettingIsMixed(targets, key) ? null : reference.settings[key];
+}
+
+export function mobileSettingIsMixed(
+  targets: readonly Pick<ScopedMobileSettingsTarget, "settings">[],
+  key: keyof ServerSettings,
+): boolean {
+  const reference = targets[0];
+  return (
+    reference !== undefined &&
+    targets.some((target) => !Equal.equals(target.settings[key], reference.settings[key]))
+  );
 }
 
 export function planMobileScopedSettingsClear(

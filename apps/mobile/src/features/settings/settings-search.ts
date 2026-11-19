@@ -152,6 +152,9 @@ const SETTINGS_SEARCH_TERMS = {
     msg("branch prefix", { $context: "settings search keyword" }),
     msg("submodules", { $context: "settings search keyword" }),
     msg("start from remote", { $context: "settings search keyword" }),
+    msg("worktree location", { $context: "settings search keyword" }),
+    msg("worktree folder", { $context: "settings search keyword" }),
+    msg("bare repository", { $context: "settings search keyword" }),
   ],
   SettingsLabs: [
     msg("beta", { $context: "settings search keyword" }),
