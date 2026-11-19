@@ -413,6 +413,13 @@ export function CommandPalette(props: {
           run: () => runCommand(command),
         })),
       );
+      actions.push({
+        key: "threadSummary",
+        kind: "action",
+        title: gt("Summarize thread"),
+        searchTerms: ["summary", "recap", "overview"],
+        run: () => navigation.navigate("ThreadSummary", activeThreadRef),
+      });
       if (canShareWithGuest) {
         actions.push({
           key: "shareWithGuest",
