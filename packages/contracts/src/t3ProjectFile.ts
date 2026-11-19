@@ -49,7 +49,7 @@ export const T3ProjectFileScript = Schema.Struct({
   runOnWorktreeDelete: Schema.optionalKey(
     Schema.Boolean.annotate({
       description:
-        "When true, the script runs in a thread's worktree before T3 Code deletes it, for example to stop services the worktree started. It runs to completion as a background process with a 3 minute limit; a failure is logged and does not stop the deletion.",
+        "When true, the script runs in a thread's worktree before T3 Code deletes it, for example to stop services the worktree started. It runs to completion as a background process with a 3 minute limit; if it fails or times out, the worktree is kept.",
     }),
   ),
   stopOnSettle: Schema.optionalKey(

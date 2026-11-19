@@ -511,4 +511,20 @@ describe("worktree delete script", () => {
       assert.isFalse(yield* fileSystem.exists(`${worktreePath}/ran`));
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
+
+  it.live("skips a deleted thread's worktree when the caller passes its link origin", () =>
+    Effect.gen(function* () {
+      const { runner, worktreePath, projectRoot, fileSystem } = yield* makeDeleteHarness({
+        command: "touch ran",
+      });
+      const result = yield* runner.runOnWorktreeDelete({
+        threadId: "thread-1",
+        projectCwd: projectRoot,
+        worktreePath,
+        linkOrigin: { sessionId: "mcp-session:linked", label: "Linked laptop" },
+      });
+      assert.deepEqual(result, { status: "skipped-for-link" });
+      assert.isFalse(yield* fileSystem.exists(`${worktreePath}/ran`));
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
 });

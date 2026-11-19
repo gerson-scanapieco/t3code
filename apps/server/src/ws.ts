@@ -3218,15 +3218,20 @@ export const layerWsRpc = (
         [WS_METHODS.vcsCreateWorktree]: (input) =>
           gitWorkflow.createWorktree(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
         [WS_METHODS.vcsRemoveWorktree]: (input) =>
-          gitWorkflow.removeWorktree(input).pipe(
-            Effect.tap(() => refreshGitStatus(input.cwd)),
-            // Subscribers of the removed checkout learn it is no longer a repository.
-            Effect.tap(() =>
-              vcsStatusBroadcaster
-                .refreshLocalStatus(input.path)
-                .pipe(Effect.ignoreCause({ log: true }), Effect.forkDetach, Effect.asVoid),
+          gitWorkflow
+            .removeWorktree(input, {
+              // Removal needs only source-control:write; running a project command takes operate.
+              skipDeleteAction: !currentSession.scopes.includes(AuthOrchestrationOperateScope),
+            })
+            .pipe(
+              Effect.tap(() => refreshGitStatus(input.cwd)),
+              // Subscribers of the removed checkout learn it is no longer a repository.
+              Effect.tap(() =>
+                vcsStatusBroadcaster
+                  .refreshLocalStatus(input.path)
+                  .pipe(Effect.ignoreCause({ log: true }), Effect.forkDetach, Effect.asVoid),
+              ),
             ),
-          ),
         [WS_METHODS.vcsCreateRef]: (input) =>
           gitWorkflow
             .createRef(input)

@@ -536,11 +536,14 @@ describe("t3_worktree_handoff", () => {
     return Effect.gen(function* () {
       const exit = yield* Effect.exit(runHandoff(harness, { branch: "feature/dispatch-defect" }));
       expectTypedFailure(exit, { _tag: "WorktreeMcpFailure", code: "operation_failed" });
-      expect(harness.removeWorktree).toHaveBeenCalledWith({
-        cwd: workspaceRoot,
-        path: "/worktrees/project/feature/dispatch-defect",
-        force: true,
-      });
+      expect(harness.removeWorktree).toHaveBeenCalledWith(
+        {
+          cwd: workspaceRoot,
+          path: "/worktrees/project/feature/dispatch-defect",
+          force: true,
+        },
+        expect.objectContaining({ rollback: true }),
+      );
     });
   });
 
@@ -550,11 +553,14 @@ describe("t3_worktree_handoff", () => {
       const exit = yield* Effect.exit(runHandoff(harness, { branch: "feature/raced" }));
       expectTypedFailure(exit, { _tag: "WorktreeMcpFailure", code: "already_in_worktree" });
       expect(harness.createWorktree).toHaveBeenCalledTimes(1);
-      expect(harness.removeWorktree).toHaveBeenCalledWith({
-        cwd: workspaceRoot,
-        path: "/worktrees/project/feature/raced",
-        force: true,
-      });
+      expect(harness.removeWorktree).toHaveBeenCalledWith(
+        {
+          cwd: workspaceRoot,
+          path: "/worktrees/project/feature/raced",
+          force: true,
+        },
+        expect.objectContaining({ rollback: true }),
+      );
       expect(harness.deleteLocalBranch).toHaveBeenCalledWith({
         cwd: workspaceRoot,
         refName: "feature/raced",
@@ -569,11 +575,14 @@ describe("t3_worktree_handoff", () => {
     return Effect.gen(function* () {
       const exit = yield* Effect.exit(runHandoff(harness, { branch: "feature/recheck-fails" }));
       expectTypedFailure(exit, { _tag: "WorktreeMcpFailure", code: "operation_failed" });
-      expect(harness.removeWorktree).toHaveBeenCalledWith({
-        cwd: workspaceRoot,
-        path: "/worktrees/project/feature/recheck-fails",
-        force: true,
-      });
+      expect(harness.removeWorktree).toHaveBeenCalledWith(
+        {
+          cwd: workspaceRoot,
+          path: "/worktrees/project/feature/recheck-fails",
+          force: true,
+        },
+        expect.objectContaining({ rollback: true }),
+      );
       expect(harness.dispatch).not.toHaveBeenCalled();
     });
   });
@@ -584,11 +593,14 @@ describe("t3_worktree_handoff", () => {
       const exit = yield* Effect.exit(runHandoff(harness, { branch: "feature/archived-race" }));
       expectTypedFailure(exit, { _tag: "WorktreeMcpFailure", code: "invalid_request" });
       expect(harness.dispatch).not.toHaveBeenCalled();
-      expect(harness.removeWorktree).toHaveBeenCalledWith({
-        cwd: workspaceRoot,
-        path: "/worktrees/project/feature/archived-race",
-        force: true,
-      });
+      expect(harness.removeWorktree).toHaveBeenCalledWith(
+        {
+          cwd: workspaceRoot,
+          path: "/worktrees/project/feature/archived-race",
+          force: true,
+        },
+        expect.objectContaining({ rollback: true }),
+      );
     });
   });
 

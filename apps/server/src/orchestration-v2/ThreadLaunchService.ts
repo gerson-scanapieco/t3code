@@ -116,7 +116,7 @@ export interface ThreadLaunchInput {
 
 type PreparationInput = Pick<
   ThreadLaunchInput,
-  "commandId" | "projectId" | "workspaceStrategy" | "initialMessage"
+  "commandId" | "projectId" | "workspaceStrategy" | "initialMessage" | "linkOrigin"
 > & {
   readonly reusedWorktree?: { readonly baseRef: string };
 };
@@ -1066,7 +1066,13 @@ const make = Effect.gen(function* () {
             const removedBranch = createdBranch;
             // Forget worktrees only after removal succeeds; failed removals must not reuse partially written checkouts.
             yield* git
-              .removeWorktree({ cwd: project.workspaceRoot, path: removedPath, force: true })
+              .removeWorktree(
+                { cwd: project.workspaceRoot, path: removedPath, force: true },
+                {
+                  rollback: true,
+                  ...(input.linkOrigin === undefined ? {} : { linkOrigin: input.linkOrigin }),
+                },
+              )
               .pipe(
                 Effect.andThen(
                   removedBranch === null
@@ -1535,6 +1541,7 @@ const make = Effect.gen(function* () {
         projectId: thread.projectId,
         workspaceStrategy: reuse?.strategy ?? workspacePreparation,
         ...(reuse === null ? {} : { reusedWorktree: reuse.reusedWorktree }),
+        ...(thread.linkOrigin === undefined ? {} : { linkOrigin: thread.linkOrigin }),
         ...(message === undefined
           ? {}
           : {

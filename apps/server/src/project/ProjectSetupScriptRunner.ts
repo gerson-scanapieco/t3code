@@ -1,4 +1,10 @@
-import { linkOriginIsFenced, ProjectId, type ProjectScript, ThreadId } from "@t3tools/contracts";
+import {
+  linkOriginIsFenced,
+  type OrchestrationV2LinkOrigin,
+  ProjectId,
+  type ProjectScript,
+  ThreadId,
+} from "@t3tools/contracts";
 import {
   projectScriptRuntimeEnv,
   projectScriptTerminalInput,
@@ -87,6 +93,8 @@ export interface ProjectWorktreeDeleteScriptInput {
   readonly projectCwd: string;
   readonly projectId?: string;
   readonly threadId?: string;
+  /** For a thread the projection no longer returns, such as a deleted one. */
+  readonly linkOrigin?: OrchestrationV2LinkOrigin;
 }
 
 export type ProjectWorktreeDeleteScriptResult =
@@ -155,7 +163,7 @@ export class ProjectWorktreeDeleteScriptError extends Schema.TaggedError<Project
     const lastLine = this.output
       .split("\n")
       .map((line) => line.trim())
-      .findLast((line) => line.length > 0);
+      .findLast((line) => line.length > 0 && line !== WORKTREE_DELETE_SCRIPT_TRUNCATED_LINE);
     const output = lastLine === undefined ? "" : `: ${lastLine.replace(/\.$/, "")}`;
     return `Delete action "${this.scriptName}" ${outcome}${output}.`;
   }
@@ -185,6 +193,7 @@ export class ProjectSetupScriptRunner extends Context.Service<
 
 export const WORKTREE_DELETE_SCRIPT_TIMEOUT = "3 minutes";
 const WORKTREE_DELETE_SCRIPT_OUTPUT_MAX_BYTES = 16 * 1024;
+const WORKTREE_DELETE_SCRIPT_TRUNCATED_LINE = "[output truncated]";
 
 /** @public */
 // Random per-run tokens prevent script output from spoofing completion.
@@ -688,6 +697,8 @@ export const make = Effect.gen(function* () {
     "ProjectSetupScriptRunner.runOnWorktreeDelete",
   )(
     function* (input) {
+      if (input.linkOrigin !== undefined && linkOriginIsFenced(input.linkOrigin))
+        return { status: "skipped-for-link" } as const;
       if (input.threadId !== undefined) {
         const thread = yield* threads.getThreadShell(ThreadId.make(input.threadId));
         if (thread?.linkOrigin !== undefined && linkOriginIsFenced(thread.linkOrigin))
@@ -724,7 +735,7 @@ export const make = Effect.gen(function* () {
         const output = yield* collectUint8StreamText({
           stream: child.all,
           maxBytes: WORKTREE_DELETE_SCRIPT_OUTPUT_MAX_BYTES,
-          truncatedMarker: "\n[output truncated]",
+          truncatedMarker: `\n${WORKTREE_DELETE_SCRIPT_TRUNCATED_LINE}`,
         });
         return { exitCode: yield* child.exitCode, output: output.text };
       }).pipe(Effect.scoped, Effect.timeoutOption(WORKTREE_DELETE_SCRIPT_TIMEOUT));
