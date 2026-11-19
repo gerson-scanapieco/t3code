@@ -2,10 +2,12 @@ import type { ReactNode } from "react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import {
   DEFAULT_UNIFIED_SETTINGS,
+  MAX_CHAT_FONT_SIZE,
   MAX_CODE_FONT_SIZE,
   MAX_INTERFACE_FONT_SIZE,
   MAX_PROMPT_FONT_SIZE,
   MAX_TERMINAL_FONT_SIZE,
+  MIN_CHAT_FONT_SIZE,
   MIN_CODE_FONT_SIZE,
   MIN_INTERFACE_FONT_SIZE,
   MIN_PROMPT_FONT_SIZE,
@@ -28,7 +30,12 @@ import {
   TYPOGRAPHY_ADVANCED_STORAGE_KEY,
 } from "../../appearanceFonts";
 import { AdvancedSettings } from "./AdvancedSettings";
-import { CodeFontPreview, PromptFontPreview, TerminalFontPreview } from "./SettingsFontPreviews";
+import {
+  ChatFontPreview,
+  CodeFontPreview,
+  PromptFontPreview,
+  TerminalFontPreview,
+} from "./SettingsFontPreviews";
 import { discoverInstalledFonts, FontFamilyPicker, useFontEnumeration } from "./FontFamilyPicker";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
@@ -99,6 +106,72 @@ function InterfaceFontRow({ preview }: { preview?: ReactNode }) {
       }}
       {...(preview !== undefined ? { preview } : {})}
     />
+  );
+}
+
+const CHAT_FONT_SIZE_AUTO = "auto";
+
+function ChatFontSizeRow() {
+  const gt = useGT();
+  const searchableSetting = useSearchableSetting();
+  const settings = useScopedSettings();
+  const updateSettings = useUpdateScopedSettings();
+  const sizes = Array.from(
+    { length: MAX_CHAT_FONT_SIZE - MIN_CHAT_FONT_SIZE + 1 },
+    (_, index) => MIN_CHAT_FONT_SIZE + index,
+  );
+  return (
+    <SettingsRow
+      {...searchableSetting("chat-font-size")}
+      description={gt("Messages, plans, and tool activity. Auto follows the interface size.")}
+      resetAction={
+        settings.fontSizeChat !== DEFAULT_UNIFIED_SETTINGS.fontSizeChat ? (
+          <SettingResetButton
+            ariaLabel={gt("Reset chat font size to default")}
+            onClick={() => updateSettings({ fontSizeChat: DEFAULT_UNIFIED_SETTINGS.fontSizeChat })}
+          />
+        ) : null
+      }
+      control={
+        <Select
+          value={
+            settings.fontSizeChat === null ? CHAT_FONT_SIZE_AUTO : String(settings.fontSizeChat)
+          }
+          onValueChange={(next) => {
+            if (next === CHAT_FONT_SIZE_AUTO) {
+              updateSettings({ fontSizeChat: null });
+              return;
+            }
+            const parsed = Number(next);
+            if (
+              Number.isInteger(parsed) &&
+              parsed >= MIN_CHAT_FONT_SIZE &&
+              parsed <= MAX_CHAT_FONT_SIZE
+            ) {
+              updateSettings({ fontSizeChat: parsed });
+            }
+          }}
+        >
+          <SelectTrigger size="sm" className="w-22 shrink-0" aria-label={gt("Chat font size")}>
+            <SelectValue>
+              {settings.fontSizeChat === null ? gt("Auto") : `${settings.fontSizeChat} px`}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectPopup align="end" alignItemWithTrigger={false}>
+            <SelectItem hideIndicator value={CHAT_FONT_SIZE_AUTO}>
+              {gt("Auto")}
+            </SelectItem>
+            {sizes.map((px) => (
+              <SelectItem hideIndicator key={px} value={String(px)}>
+                {px} px
+              </SelectItem>
+            ))}
+          </SelectPopup>
+        </Select>
+      }
+    >
+      <ChatFontPreview />
+    </SettingsRow>
   );
 }
 
@@ -289,6 +362,7 @@ function FontSettingsGroup() {
   return (
     <>
       <InterfaceFontRow />
+      <ChatFontSizeRow />
       <PromptFontRow />
       <CodeFontRow />
       <TerminalFontRow />
@@ -328,6 +402,7 @@ function SimpleFontRows() {
   return (
     <>
       <InterfaceFontRow preview={<PromptFontPreview />} />
+      <ChatFontSizeRow />
       <CodeFontRow
         title={gt("Monospace font")}
         resetLabel={gt("Reset monospace font to default")}

@@ -5,6 +5,7 @@ import * as Effect from "effect/Effect";
 import { useGT } from "gt-react";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { useEffect, useRef, useState } from "react";
+import ChatMarkdown from "../ChatMarkdown";
 import {
   ComposerPromptEditorTiptap as ComposerPromptEditor,
   type ComposerPromptEditorHandle,
@@ -52,6 +53,19 @@ export function PromptFontPreview() {
         onChange={onChange}
         onPaste={noop}
       />
+    </div>
+  );
+}
+
+const CHAT_PREVIEW_TEXT =
+  "The flaky test raced the surface's resize. I made `fit()` wait for the font to load:\n\n" +
+  "- Awaited `setFont` before measuring\n" +
+  "- Kept the header aligned with the settings panel";
+
+export function ChatFontPreview() {
+  return (
+    <div className="chat-font-preview mt-1 mb-2 rounded-lg border border-border bg-background px-3 py-2">
+      <ChatMarkdown text={CHAT_PREVIEW_TEXT} cwd={undefined} />
     </div>
   );
 }

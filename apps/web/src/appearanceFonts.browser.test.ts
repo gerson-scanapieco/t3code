@@ -35,6 +35,7 @@ describe("applyAppearanceFontVariables", () => {
       composer: "",
       sizeInterface: 20,
       sizePrompt: 14,
+      sizeChat: null,
       sizeCode: 13,
       smoothing: true,
     };
@@ -63,6 +64,7 @@ describe("applyAppearanceFontVariables", () => {
         composer: "",
         sizeInterface: 16,
         sizePrompt: 14,
+        sizeChat: null,
         sizeCode: 13,
         smoothing: true,
         separate: false,
@@ -84,6 +86,51 @@ describe("applyAppearanceFontVariables", () => {
       expect(gutter("monospace")).toBeGreaterThan(24);
       expect(gutter("sans-serif")).toBe(20);
     } finally {
+      if (style === null) root.removeAttribute("style");
+      else root.setAttribute("style", style);
+    }
+  });
+
+  it("sizes timeline text from the interface until a chat size is set, leaving code alone", () => {
+    const root = document.documentElement;
+    const style = root.getAttribute("style");
+    const sizes = () => {
+      const row = document.createElement("div");
+      row.className = "messages-timeline-row-frame";
+      row.innerHTML =
+        '<p class="text-sm"></p><p class="text-xs"></p><p class="font-mono text-xs"></p>';
+      document.body.append(row);
+      try {
+        return [...row.children].map((child) =>
+          Number.parseFloat(getComputedStyle(child).fontSize).toFixed(2),
+        );
+      } finally {
+        row.remove();
+      }
+    };
+    const apply = (sizeChat: number | null) =>
+      applyAppearanceFontVariables(root, {
+        sans: "",
+        code: "",
+        composer: "",
+        sizeInterface: 18,
+        sizePrompt: 14,
+        sizeChat,
+        sizeCode: 13,
+        smoothing: true,
+        separate: false,
+      });
+    try {
+      apply(null);
+      expect(sizes()).toEqual(["15.75", "13.50", "13.50"]);
+
+      apply(21);
+      expect(sizes()).toEqual(["20.00", "17.14", "13.50"]);
+
+      apply(null);
+      expect(sizes()).toEqual(["15.75", "13.50", "13.50"]);
+    } finally {
+      delete root.dataset.chatFontSize;
       if (style === null) root.removeAttribute("style");
       else root.setAttribute("style", style);
     }

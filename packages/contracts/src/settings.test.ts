@@ -323,6 +323,15 @@ describe("resolveIdleCompaction", () => {
   });
 });
 
+describe("ClientSettings chat font size", () => {
+  it("follows the interface size until set, and a patch can return it there", () => {
+    expect(decodeClientSettings({}).fontSizeChat).toBeNull();
+    expect(decodeClientSettings({ fontSizeChat: 16 }).fontSizeChat).toBe(16);
+    expect(decodeClientSettingsPatch({ fontSizeChat: null })).toEqual({ fontSizeChat: null });
+    expect(() => decodeClientSettingsPatch({ fontSizeChat: 30 })).toThrow();
+  });
+});
+
 describe("ClientSettings notifications", () => {
   it("requires opt-in when existing settings omit notification preferences", () => {
     expect(decodeClientSettings({}).notificationMode).toBe("off");
