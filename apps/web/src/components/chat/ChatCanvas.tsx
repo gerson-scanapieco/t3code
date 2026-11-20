@@ -115,7 +115,10 @@ export function ChatCanvas({
         narrowestWidth: transitionWidths?.narrowestWidth ?? width,
         height: element.clientHeight,
         padding: Number.parseFloat(styles.paddingLeft),
-        maxChatWidth: Number.parseFloat(styles.width),
+        // The probe follows the transition width override below, so keep the settled width.
+        maxChatWidth: transitionWidths
+          ? store.getState().measurements.maxChatWidth
+          : Number.parseFloat(styles.width),
         minChatWidth: Number.parseFloat(styles.minWidth),
         composerHeight: composerOverlayElement?.getBoundingClientRect().height ?? 0,
         timelineGutter: timelineElement
@@ -158,6 +161,17 @@ export function ChatCanvas({
     detailsCardPlacement: model.detailsCardPlacement,
   };
   const { layout } = context;
+  // Wrap text once at the narrowest width a panel transition reaches instead of on every frame.
+  const transitionChatWidth =
+    measurements.narrowestWidth !== undefined && measurements.narrowestWidth < measurements.width
+      ? Math.max(
+          0,
+          Math.min(
+            measurements.maxChatWidth,
+            measurements.narrowestWidth - measurements.padding * 2,
+          ),
+        )
+      : null;
   return (
     <ChatCanvasContext value={context}>
       <div
@@ -171,6 +185,9 @@ export function ChatCanvas({
             "--chat-timeline-gutter": `${measurements.timelineGutter}px`,
             "--chat-lane-inset-start": `${layout.chat.insetStart}px`,
             "--chat-lane-inset-end": `${layout.chat.insetEnd}px`,
+            ...(transitionChatWidth === null
+              ? {}
+              : { "--chat-content-max-width": `${transitionChatWidth}px` }),
           } as CSSProperties
         }
       >

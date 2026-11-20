@@ -169,9 +169,16 @@ function PreviewPanelShellFrame(
             : "shrink-0 border-l border-border"
           : "w-full",
         collapsible &&
-          "[[data-panel-animations=true]_&]:transition-[width] [[data-panel-animations=true]_&]:duration-(--panel-animation-duration) [[data-panel-animations=true]_&]:ease-out",
+          "[[data-panel-animations=true]_&]:transition-[width] [[data-panel-animations=true]_&]:duration-(--panel-animation-duration)",
+        collapsible &&
+          (open
+            ? "[[data-panel-animations=true]_&]:ease-out"
+            : // Leaving with ease-out covers most of the width in the first frames and reads as faster.
+              "[[data-panel-animations=true]_&]:ease-in"),
         collapsible && open && "[[data-panel-animations=true]_&]:starting:w-0!",
         collapsible && !open && "pointer-events-none",
+        // Closing slides over the chat so it settles at its final width once, not on the last frame.
+        collapsible && !open && !maximized && "absolute inset-y-0 end-0 z-30",
       )}
       style={
         isInline
