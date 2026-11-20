@@ -23,6 +23,16 @@ function panelWidthTransitions(element: HTMLElement) {
   );
 }
 
+function closingPanelTransition(element: HTMLElement) {
+  return panelWidthTransitions(element).find(
+    (animation) =>
+      animation.effect instanceof KeyframeEffect &&
+      animation.effect.target?.matches(
+        '[data-preview-panel-mode="inline"][data-workspace-unavailable="true"]',
+      ),
+  );
+}
+
 // Sample only the layout panels; seeking unrelated transitions can change their lifecycle.
 function measureTransitionWidths(element: HTMLElement, transitions: CSSTransition[]) {
   if (transitions.length === 0) return null;
@@ -161,6 +171,24 @@ export function ChatCanvas({
     detailsCardPlacement: model.detailsCardPlacement,
   };
   const { layout } = context;
+  const laneLeft = layout.chat.left;
+  const previousLaneLeft = useRef(laneLeft);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- a closing panel slides over the canvas, which widens at once; glide the lane from where it was for the rest of the slide
+  useLayoutEffect(() => {
+    const from = previousLaneLeft.current;
+    previousLaneLeft.current = laneLeft;
+    const element = elementRef.current;
+    if (!element || from === laneLeft) return;
+    const closing = closingPanelTransition(element);
+    if (!closing) return;
+    const remaining =
+      Number(closing.effect?.getComputedTiming().endTime ?? 0) - Number(closing.currentTime ?? 0);
+    if (remaining <= 0) return;
+    element.animate([{ translate: `${from - laneLeft}px 0` }, { translate: "0 0" }], {
+      duration: remaining,
+      easing: "ease-in",
+    });
+  }, [laneLeft]);
   // Wrap text once at the narrowest width a panel transition reaches instead of on every frame.
   const transitionChatWidth =
     measurements.narrowestWidth !== undefined && measurements.narrowestWidth < measurements.width
