@@ -123,6 +123,7 @@ import { useSearchableSetting } from "./settingsSearch";
 import { nativeLanguageName, SYSTEM_LANGUAGE } from "@t3tools/client-runtime/locales";
 import { SUPPORTED_LOCALES } from "../../i18n/locales";
 import { BackgroundActivitySettingsRow } from "./BackgroundActivitySettings";
+import { SettingsBackupSection } from "./SettingsBackupSection";
 import { AdvancedSettings } from "./AdvancedSettings";
 import { PullRequestLinksOpenInAppSetting } from "./IntegrationsSettings";
 import { StorageCleanupSections } from "./StorageSettings";
@@ -2413,6 +2414,8 @@ export function MaintenanceSettingsPanel() {
           }
         />
       </SettingsSection>
+
+      <SettingsBackupSection />
 
       <SettingsSection id="background" title={gt("Background activity")}>
         <BackgroundActivitySettingsRow />

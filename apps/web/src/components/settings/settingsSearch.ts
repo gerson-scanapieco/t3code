@@ -845,6 +845,18 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [msg("queue steer running turn send default behavior composer")],
   },
   {
+    id: "settings-export",
+    title: msg("Export settings"),
+    to: "/settings/maintenance",
+    searchTerms: [msg("backup save file copy another computer migrate transfer")],
+  },
+  {
+    id: "settings-import",
+    title: msg("Import settings"),
+    to: "/settings/maintenance",
+    searchTerms: [msg("backup restore load file another computer migrate transfer")],
+  },
+  {
     id: "provider-update-checks",
     title: msg("Provider update checks"),
     to: "/settings/maintenance",
