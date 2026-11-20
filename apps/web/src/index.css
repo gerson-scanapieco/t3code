@@ -2738,4 +2738,9 @@ html.floating-main-panel {
     main[data-slot="sidebar-inset"] {
     margin-inline-start: 0;
   }
+  html.floating-main-panel
+    [data-slot="sidebar-wrapper"][data-panel-animations="true"]
+    main[data-slot="sidebar-inset"] {
+    transition: margin-inline-start var(--panel-animation-duration) ease-out;
+  }
 }
