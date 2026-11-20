@@ -2700,7 +2700,7 @@ code {
 
 /* The window and sidebar sit on the canvas colour; the main panel is a raised card on top. */
 html.floating-main-panel {
-  --floating-main-panel-gap: 6px;
+  --floating-main-panel-gap: 8px;
 }
 @media (width >= 48rem) {
   html.floating-main-panel [data-slot="sidebar-wrapper"] {
