@@ -2715,6 +2715,16 @@ html.floating-main-panel {
   html.floating-main-panel [data-slot="sidebar-inner"] {
     background-color: transparent;
   }
+  /* Without a sidebar divider the stage art would end in a hard edge beside the panel. */
+  html.floating-main-panel .sidebar-stage-backdrop {
+    --floating-stage-mask:
+      linear-gradient(to bottom, black 0%, black 55%, transparent 92%),
+      linear-gradient(to right, black 70%, transparent 100%);
+    mask-image: var(--floating-stage-mask);
+    mask-composite: intersect;
+    -webkit-mask-image: var(--floating-stage-mask);
+    -webkit-mask-composite: source-in;
+  }
   html.floating-main-panel main[data-slot="sidebar-inset"] {
     --background: var(--card);
     height: calc(100dvh - 2 * var(--floating-main-panel-gap));
