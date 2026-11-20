@@ -513,6 +513,7 @@ export const ClientSettingsSchema = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_WINDOW_OPACITY)),
   ),
   windowBlur: WindowBlur.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_WINDOW_BLUR))),
+  floatingMainPanel: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   fontSizeInterface: InterfaceFontSize.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_INTERFACE_FONT_SIZE)),
   ),
@@ -2133,6 +2134,7 @@ export const ClientSettingsPatch = Schema.Struct({
   glassOpacity: Schema.optionalKey(GlassOpacity),
   windowOpacity: Schema.optionalKey(WindowOpacity),
   windowBlur: Schema.optionalKey(WindowBlur),
+  floatingMainPanel: Schema.optionalKey(Schema.Boolean),
   onboardingCompletedAt: Schema.optionalKey(Schema.NullOr(Schema.String)),
   fontSizeInterface: Schema.optionalKey(InterfaceFontSize),
   fontSizePrompt: Schema.optionalKey(PromptFontSize),

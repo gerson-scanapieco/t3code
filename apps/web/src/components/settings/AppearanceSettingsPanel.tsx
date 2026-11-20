@@ -378,6 +378,30 @@ export function AppearanceSettingsPanel() {
         ) : null}
 
         <SettingsRow
+          {...searchableSetting("floating-main-panel")}
+          description={gt(
+            "Float the main panel as a bordered card beside the sidebar, without a divider.",
+          )}
+          resetAction={
+            settings.floatingMainPanel !== DEFAULT_UNIFIED_SETTINGS.floatingMainPanel ? (
+              <SettingResetButton
+                ariaLabel={gt("Reset floating main panel to default")}
+                onClick={() =>
+                  updateSettings({ floatingMainPanel: DEFAULT_UNIFIED_SETTINGS.floatingMainPanel })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.floatingMainPanel}
+              onCheckedChange={(checked) => updateSettings({ floatingMainPanel: Boolean(checked) })}
+              aria-label={gt("Floating main panel")}
+            />
+          }
+        />
+
+        <SettingsRow
           {...searchableSetting("chat-width")}
           description={gt("Set how wide messages and the composer can grow on large screens.")}
           resetAction={

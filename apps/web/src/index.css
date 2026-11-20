@@ -2697,3 +2697,35 @@ code {
 .messages-timeline-scroll:focus-visible {
   outline: none;
 }
+
+/* The window and sidebar sit on the canvas colour; the main panel is a raised card on top. */
+html.floating-main-panel {
+  --floating-main-panel-gap: 6px;
+}
+@media (width >= 48rem) {
+  html.floating-main-panel [data-slot="sidebar-wrapper"] {
+    background-color: var(--background);
+  }
+  html.floating-main-panel.window-translucent [data-slot="sidebar-wrapper"] {
+    background-color: color-mix(in srgb, var(--background) var(--window-opacity), transparent);
+  }
+  html.floating-main-panel [data-slot="sidebar-container"] {
+    border-inline-width: 0;
+  }
+  html.floating-main-panel [data-slot="sidebar-inner"] {
+    background-color: transparent;
+  }
+  html.floating-main-panel main[data-slot="sidebar-inset"] {
+    --background: var(--card);
+    height: calc(100dvh - 2 * var(--floating-main-panel-gap));
+    margin: var(--floating-main-panel-gap);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  html.floating-main-panel
+    [data-slot="sidebar-wrapper"]:has([data-slot="sidebar"][data-state="expanded"])
+    main[data-slot="sidebar-inset"] {
+    margin-inline-start: 0;
+  }
+}

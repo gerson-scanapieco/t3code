@@ -504,6 +504,9 @@ export function useSettingsRestore(onRestored?: () => void) {
       ? [gt("Window opacity")]
       : []),
     ...(settings.windowBlur !== DEFAULT_UNIFIED_SETTINGS.windowBlur ? [gt("Window blur")] : []),
+    ...(settings.floatingMainPanel !== DEFAULT_UNIFIED_SETTINGS.floatingMainPanel
+      ? [gt("Floating main panel")]
+      : []),
     ...(settings.diffColorScheme !== DEFAULT_UNIFIED_SETTINGS.diffColorScheme
       ? [gt("Diff colors")]
       : []),
@@ -732,6 +735,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       glassOpacity: DEFAULT_UNIFIED_SETTINGS.glassOpacity,
       windowOpacity: DEFAULT_UNIFIED_SETTINGS.windowOpacity,
       windowBlur: DEFAULT_UNIFIED_SETTINGS.windowBlur,
+      floatingMainPanel: DEFAULT_UNIFIED_SETTINGS.floatingMainPanel,
       panelAnimationDurationMs: DEFAULT_UNIFIED_SETTINGS.panelAnimationDurationMs,
       sidebarProjectGroupingMode: DEFAULT_UNIFIED_SETTINGS.sidebarProjectGroupingMode,
       sidebarProjectSortOrder: DEFAULT_UNIFIED_SETTINGS.sidebarProjectSortOrder,

@@ -110,6 +110,9 @@ function startClientAppearance(): void {
         root.style.removeProperty("--window-opacity");
       }
     }
+    if (previous?.floatingMainPanel !== settings.floatingMainPanel) {
+      root.classList.toggle("floating-main-panel", settings.floatingMainPanel);
+    }
     if (
       previous?.fontFamilySans !== settings.fontFamilySans ||
       previous.fontFamilyCode !== settings.fontFamilyCode ||

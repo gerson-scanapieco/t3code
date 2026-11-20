@@ -372,6 +372,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     macOnly: true,
   },
   {
+    id: "floating-main-panel",
+    title: msg("Floating main panel"),
+    to: "/settings/appearance",
+    searchTerms: [msg("layout inset card rounded border sidebar divider")],
+  },
+  {
     // Prefixed because the slider control already owns the `window-blur` id.
     id: "setting-window-blur",
     title: msg("Window blur"),
