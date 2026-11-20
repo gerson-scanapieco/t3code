@@ -30,7 +30,7 @@ export const setClientSettings = DesktopIpc.makeIpcMethod({
     const desktopWindow = yield* DesktopWindow.DesktopWindow;
     yield* clientSettings.set(settings);
     yield* snapShot.configure(settings);
-    yield* desktopWindow.setWindowOpacity(settings.windowOpacity);
+    yield* desktopWindow.setWindowTranslucency(settings);
     yield* applyLanguage(settings.language);
   }),
 });

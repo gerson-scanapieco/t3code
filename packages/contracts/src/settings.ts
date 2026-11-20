@@ -160,6 +160,14 @@ export const WindowOpacity = Schema.Int.check(
 export type WindowOpacity = typeof WindowOpacity.Type;
 const DEFAULT_WINDOW_OPACITY: WindowOpacity = MAX_WINDOW_OPACITY;
 
+export const MIN_WINDOW_BLUR = 0;
+export const MAX_WINDOW_BLUR = 64;
+export const WindowBlur = Schema.Int.check(
+  Schema.isBetween({ minimum: MIN_WINDOW_BLUR, maximum: MAX_WINDOW_BLUR }),
+);
+export type WindowBlur = typeof WindowBlur.Type;
+const DEFAULT_WINDOW_BLUR: WindowBlur = 20;
+
 export const MIN_APPEARANCE_CONTRAST = 50;
 export const MAX_APPEARANCE_CONTRAST = 200;
 export const AppearanceContrast = Schema.Int.check(
@@ -504,6 +512,7 @@ export const ClientSettingsSchema = Schema.Struct({
   windowOpacity: WindowOpacity.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_WINDOW_OPACITY)),
   ),
+  windowBlur: WindowBlur.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_WINDOW_BLUR))),
   fontSizeInterface: InterfaceFontSize.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_INTERFACE_FONT_SIZE)),
   ),
@@ -2123,6 +2132,7 @@ export const ClientSettingsPatch = Schema.Struct({
   environmentIdentificationMode: Schema.optionalKey(EnvironmentIdentificationMode),
   glassOpacity: Schema.optionalKey(GlassOpacity),
   windowOpacity: Schema.optionalKey(WindowOpacity),
+  windowBlur: Schema.optionalKey(WindowBlur),
   onboardingCompletedAt: Schema.optionalKey(Schema.NullOr(Schema.String)),
   fontSizeInterface: Schema.optionalKey(InterfaceFontSize),
   fontSizePrompt: Schema.optionalKey(PromptFontSize),

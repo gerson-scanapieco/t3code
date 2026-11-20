@@ -15,6 +15,10 @@ import * as TestClock from "effect/testing/TestClock";
 import * as Electron from "electron";
 import { vi } from "vite-plus/test";
 
+vi.mock("../electron/MacWindowBlur.ts", () => ({
+  setMacWindowBlurRadius: vi.fn(() => Promise.resolve()),
+}));
+
 vi.mock("electron", async (importOriginal) => ({
   ...(await importOriginal<typeof import("electron")>()),
   session: {
@@ -34,6 +38,7 @@ vi.mock("electron", async (importOriginal) => ({
 }));
 
 import * as DesktopAssets from "../app/DesktopAssets.ts";
+import { setMacWindowBlurRadius } from "../electron/MacWindowBlur.ts";
 import * as DesktopConfig from "../app/DesktopConfig.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopPrimaryPaste from "../app/DesktopPrimaryPaste.ts";
@@ -129,7 +134,6 @@ function makeFakeBrowserWindow() {
     setOpacity: vi.fn(),
     setTitle: vi.fn(),
     setTitleBarOverlay: vi.fn(),
-    setVibrancy: vi.fn(),
     setWindowButtonPosition: vi.fn(),
     show: vi.fn(),
     webContents,
@@ -1295,16 +1299,17 @@ describe("DesktopWindow", () => {
   );
 
   it("keeps main windows opaque at full window opacity and off macOS", () => {
-    const opaque: DesktopWindow.MainWindowMaterial = { backgroundColor: "#ffffff", vibrancy: null };
+    const opaque: DesktopWindow.MainWindowMaterial = { backgroundColor: "#ffffff", blurRadius: 0 };
     const translucent: DesktopWindow.MainWindowMaterial = {
       backgroundColor: "#00000000",
-      vibrancy: "under-window",
+      blurRadius: 20,
     };
     const resolve = (platform: NodeJS.Platform, windowOpacity: number) =>
       DesktopWindow.resolveMainWindowMaterial({
         platform,
         shouldUseDarkColors: false,
         windowOpacity,
+        windowBlur: 20,
       });
     assert.deepEqual(resolve("darwin", 100), opaque);
     assert.deepEqual(resolve("darwin", 85), translucent);
@@ -1328,20 +1333,18 @@ describe("DesktopWindow", () => {
       yield* Effect.gen(function* () {
         const desktopWindow = yield* DesktopWindow.DesktopWindow;
         yield* desktopWindow.createMain;
-        yield* desktopWindow.setWindowOpacity(85);
       }).pipe(Effect.provide(layer));
 
       assert.deepInclude(createdWindowOptions[0], {
         backgroundColor: "#00000000",
-        vibrancy: "under-window",
-        visualEffectState: "active",
+        transparent: true,
       });
-      assert.lengthOf(vi.mocked(main.window.setVibrancy).mock.calls, 0);
     }),
   );
 
-  it.effect("applies window opacity live and keeps it through appearance syncs", () =>
+  it.effect("applies window translucency live and keeps it through appearance syncs", () =>
     Effect.gen(function* () {
+      vi.mocked(setMacWindowBlurRadius).mockClear();
       const main = makeFakeBrowserWindow();
       const popup = makeFakeBrowserWindow();
       const layer = layerTest({
@@ -1357,20 +1360,23 @@ describe("DesktopWindow", () => {
 
       yield* Effect.gen(function* () {
         const desktopWindow = yield* DesktopWindow.DesktopWindow;
-        yield* desktopWindow.setWindowOpacity(85);
-        yield* desktopWindow.setWindowOpacity(70);
+        yield* desktopWindow.setWindowTranslucency({ windowOpacity: 85, windowBlur: 20 });
+        yield* desktopWindow.setWindowTranslucency({ windowOpacity: 70, windowBlur: 20 });
+        yield* desktopWindow.setWindowTranslucency({ windowOpacity: 70, windowBlur: 8 });
         yield* desktopWindow.syncAppearance;
-        yield* desktopWindow.setWindowOpacity(100);
+        yield* desktopWindow.setWindowTranslucency({ windowOpacity: 100, windowBlur: 8 });
       }).pipe(Effect.provide(layer));
 
-      assert.deepEqual(vi.mocked(main.window.setVibrancy).mock.calls, [["under-window"], [null]]);
+      assert.deepEqual(
+        vi.mocked(setMacWindowBlurRadius).mock.calls.map(([, radius]) => radius),
+        [20, 8, 0],
+      );
       assert.deepEqual(vi.mocked(main.window.setBackgroundColor).mock.calls, [
         ["#00000000"],
         ["#00000000"],
         ["#ffffff"],
       ]);
       assert.deepEqual(vi.mocked(popup.window.setBackgroundColor).mock.calls, [["#ffffff"]]);
-      assert.lengthOf(vi.mocked(popup.window.setVibrancy).mock.calls, 0);
     }),
   );
 

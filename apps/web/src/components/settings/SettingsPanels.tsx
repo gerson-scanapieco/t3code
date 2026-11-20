@@ -503,6 +503,7 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.windowOpacity !== DEFAULT_UNIFIED_SETTINGS.windowOpacity
       ? [gt("Window opacity")]
       : []),
+    ...(settings.windowBlur !== DEFAULT_UNIFIED_SETTINGS.windowBlur ? [gt("Window blur")] : []),
     ...(settings.diffColorScheme !== DEFAULT_UNIFIED_SETTINGS.diffColorScheme
       ? [gt("Diff colors")]
       : []),
@@ -730,6 +731,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       environmentIdentificationMode: DEFAULT_UNIFIED_SETTINGS.environmentIdentificationMode,
       glassOpacity: DEFAULT_UNIFIED_SETTINGS.glassOpacity,
       windowOpacity: DEFAULT_UNIFIED_SETTINGS.windowOpacity,
+      windowBlur: DEFAULT_UNIFIED_SETTINGS.windowBlur,
       panelAnimationDurationMs: DEFAULT_UNIFIED_SETTINGS.panelAnimationDurationMs,
       sidebarProjectGroupingMode: DEFAULT_UNIFIED_SETTINGS.sidebarProjectGroupingMode,
       sidebarProjectSortOrder: DEFAULT_UNIFIED_SETTINGS.sidebarProjectSortOrder,

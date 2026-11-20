@@ -24,6 +24,7 @@ import { getDesktopUrl } from "../electron/ElectronProtocol.ts";
 import * as ElectronShell from "../electron/ElectronShell.ts";
 import * as ElectronTheme from "../electron/ElectronTheme.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
+import { setMacWindowBlurRadius } from "../electron/MacWindowBlur.ts";
 import {
   MENU_ACTION_CHANNEL,
   QUIT_SHORTCUT_CHANNEL,
@@ -54,6 +55,14 @@ class ContextMenuImageCopyError extends Schema.TaggedError<ContextMenuImageCopyE
 ) {
   override get message(): string {
     return "Could not copy the context-menu image.";
+  }
+}
+
+class MainWindowBlurError extends Schema.TaggedError<MainWindowBlurError>()("MainWindowBlurError", {
+  cause: Schema.Defect(),
+}) {
+  override get message(): string {
+    return "Could not set the main window blur.";
   }
 }
 // Match --workspace-topbar-height in apps/web/src/index.css; native macOS buttons stay 14 points at any zoom.
@@ -146,7 +155,7 @@ export class DesktopWindow extends Context.Service<
     readonly zoomMain: (direction: MainWindowZoomDirection) => Effect.Effect<void>;
     readonly runMainContentsCommand: (command: MainWindowContentsCommand) => Effect.Effect<void>;
     readonly syncAppearance: Effect.Effect<void>;
-    readonly setWindowOpacity: (windowOpacity: number) => Effect.Effect<void>;
+    readonly setWindowTranslucency: (translucency: WindowTranslucency) => Effect.Effect<void>;
   }
 >()("@t3tools/desktop/window/DesktopWindow") {}
 
@@ -169,34 +178,36 @@ function getInitialWindowBackgroundColor(shouldUseDarkColors: boolean): string {
   return shouldUseDarkColors ? "#000000" : "#ffffff";
 }
 
+export interface WindowTranslucency {
+  readonly windowOpacity: number;
+  readonly windowBlur: number;
+}
+
 export interface MainWindowMaterial {
   readonly backgroundColor: string;
-  readonly vibrancy: "under-window" | null;
+  readonly blurRadius: number;
 }
 
 /** Below full opacity, macOS main windows show the blurred desktop through a clear background. */
-export function resolveMainWindowMaterial(input: {
-  readonly platform: NodeJS.Platform;
-  readonly shouldUseDarkColors: boolean;
-  readonly windowOpacity: number;
-}): MainWindowMaterial {
+export function resolveMainWindowMaterial(
+  input: WindowTranslucency & {
+    readonly platform: NodeJS.Platform;
+    readonly shouldUseDarkColors: boolean;
+  },
+): MainWindowMaterial {
   return input.platform === "darwin" && input.windowOpacity < MAX_WINDOW_OPACITY
-    ? { backgroundColor: "#00000000", vibrancy: "under-window" }
+    ? { backgroundColor: "#00000000", blurRadius: input.windowBlur }
     : {
         backgroundColor: getInitialWindowBackgroundColor(input.shouldUseDarkColors),
-        vibrancy: null,
+        blurRadius: 0,
       };
 }
 
-function applyMainWindowMaterial(
-  window: Electron.BrowserWindow,
-  material: MainWindowMaterial,
-  platform: NodeJS.Platform,
-): void {
-  if (window.isDestroyed()) return;
-  window.setBackgroundColor(material.backgroundColor);
-  if (platform === "darwin") window.setVibrancy(material.vibrancy);
-}
+const applyMainWindowBlur = (window: Electron.BrowserWindow, radius: number) =>
+  Effect.tryPromise({
+    try: () => setMacWindowBlurRadius(window, radius),
+    catch: (cause) => new MainWindowBlurError({ cause }),
+  }).pipe(Effect.catch((error) => logWindowWarning(error.message, { cause: error.cause })));
 
 type DisplayBounds = Pick<Electron.Rectangle, "x" | "y" | "width" | "height">;
 
@@ -428,7 +439,10 @@ export const make = Effect.gen(function* () {
   const electronApp = yield* ElectronApp.ElectronApp;
   const rendererHistory = yield* DesktopRendererHistory.DesktopRendererHistory;
   const backendReadyRef = yield* Ref.make(false);
-  const windowOpacityRef = yield* Ref.make<number>(MAX_WINDOW_OPACITY);
+  const windowTranslucencyRef = yield* Ref.make<WindowTranslucency>({
+    windowOpacity: MAX_WINDOW_OPACITY,
+    windowBlur: DEFAULT_CLIENT_SETTINGS.windowBlur,
+  });
   let backendHasStarted = false;
   let mainClosedDuringStartup = false;
   const splashWindowRef = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
@@ -486,20 +500,16 @@ export const make = Effect.gen(function* () {
     const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;
     const persistedSettings = yield* desktopSettings.get;
     const persistedBounds = persistedSettings.mainWindowBounds;
-    const windowOpacity = yield* clientSettings.get.pipe(
-      Effect.map(
-        Option.match({
-          onNone: () => DEFAULT_CLIENT_SETTINGS.windowOpacity,
-          onSome: (settings) => settings.windowOpacity,
-        }),
-      ),
-      Effect.orElseSucceed(() => DEFAULT_CLIENT_SETTINGS.windowOpacity),
+    const { windowOpacity, windowBlur } = yield* clientSettings.get.pipe(
+      Effect.map(Option.getOrElse(() => DEFAULT_CLIENT_SETTINGS)),
+      Effect.orElseSucceed(() => DEFAULT_CLIENT_SETTINGS),
     );
-    yield* Ref.set(windowOpacityRef, windowOpacity);
+    yield* Ref.set(windowTranslucencyRef, { windowOpacity, windowBlur });
     const material = resolveMainWindowMaterial({
       platform: environment.platform,
       shouldUseDarkColors,
       windowOpacity,
+      windowBlur,
     });
     const displayBoundsResult = yield* Effect.sync(() => {
       try {
@@ -532,9 +542,8 @@ export const make = Effect.gen(function* () {
       ...(environment.platform === "darwin"
         ? {
             disableAutoHideCursor: true,
-            // Constructor-only; keeps vibrancy turned on later from dimming while unfocused.
-            visualEffectState: "active" as const,
-            ...(material.vibrancy === null ? {} : { vibrancy: material.vibrancy }),
+            // Constructor-only; without it a clear background set later keeps stale pixels.
+            transparent: true,
           }
         : {}),
       backgroundColor: material.backgroundColor,
@@ -1052,6 +1061,8 @@ export const make = Effect.gen(function* () {
       window.webContents.setBackgroundThrottling(true);
       if (persistedSettings.mainWindowMaximized) window.maximize();
       yield* electronWindow.reveal(window);
+      // The window has no macOS window number to blur until it is on screen.
+      if (material.blurRadius > 0) yield* applyMainWindowBlur(window, material.blurRadius);
       yield* dismissConnectingSplash;
     });
     pendingMainReveals.set(window, revealWhenReady);
@@ -1277,7 +1288,7 @@ export const make = Effect.gen(function* () {
       const mainMaterial = resolveMainWindowMaterial({
         platform: environment.platform,
         shouldUseDarkColors,
-        windowOpacity: yield* Ref.get(windowOpacityRef),
+        ...(yield* Ref.get(windowTranslucencyRef)),
       });
       yield* electronWindow.syncAllAppearance((window, { titleBarOverlay }) =>
         syncWindowAppearance(
@@ -1291,20 +1302,27 @@ export const make = Effect.gen(function* () {
         ),
       );
     }).pipe(Effect.withSpan("desktop.window.syncAppearance")),
-    setWindowOpacity: Effect.fn("desktop.window.setWindowOpacity")(function* (windowOpacity) {
-      const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;
-      const resolve = (opacity: number) =>
-        resolveMainWindowMaterial({
-          platform: environment.platform,
-          shouldUseDarkColors,
-          windowOpacity: opacity,
-        });
-      const previous = resolve(yield* Ref.getAndSet(windowOpacityRef, windowOpacity));
-      const next = resolve(windowOpacity);
-      if (previous.vibrancy === next.vibrancy) return;
-      const window = yield* electronWindow.main;
-      if (Option.isSome(window)) applyMainWindowMaterial(window.value, next, environment.platform);
-    }),
+    setWindowTranslucency: Effect.fn("desktop.window.setWindowTranslucency")(
+      function* (translucency) {
+        const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;
+        const resolve = (value: WindowTranslucency) =>
+          resolveMainWindowMaterial({
+            platform: environment.platform,
+            shouldUseDarkColors,
+            ...value,
+          });
+        const previous = resolve(yield* Ref.getAndSet(windowTranslucencyRef, translucency));
+        const next = resolve(translucency);
+        const window = Option.getOrNull(yield* electronWindow.main);
+        if (window === null || window.isDestroyed()) return;
+        if (previous.backgroundColor !== next.backgroundColor) {
+          window.setBackgroundColor(next.backgroundColor);
+        }
+        if (previous.blurRadius !== next.blurRadius) {
+          yield* applyMainWindowBlur(window, next.blurRadius);
+        }
+      },
+    ),
   });
 });
 

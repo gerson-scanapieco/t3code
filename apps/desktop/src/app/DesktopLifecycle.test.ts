@@ -106,7 +106,7 @@ function layerDesktopWindow(
     zoomMain: () => Effect.void,
     runMainContentsCommand: () => Effect.void,
     syncAppearance: Effect.void,
-    setWindowOpacity: () => Effect.void,
+    setWindowTranslucency: () => Effect.void,
   });
 }
 

@@ -13,7 +13,9 @@ import {
   MIN_APPEARANCE_CONTRAST,
   MIN_GLASS_OPACITY,
   MIN_PANEL_ANIMATION_DURATION_MS,
+  MAX_WINDOW_BLUR,
   MAX_WINDOW_OPACITY,
+  MIN_WINDOW_BLUR,
   MIN_WINDOW_OPACITY,
 } from "@t3tools/contracts/settings";
 import { supportsWindowOpacity } from "../../lib/windowOpacity";
@@ -140,6 +142,12 @@ export function AppearanceSettingsPanel() {
   const windowOpacitySliderStyle = {
     "--settings-slider-progress": `${windowOpacityRatio * 100}%`,
     "--settings-slider-fill-offset": `${0.5 - windowOpacityRatio}rem`,
+  } as CSSProperties;
+  const windowBlurRatio =
+    (settings.windowBlur - MIN_WINDOW_BLUR) / (MAX_WINDOW_BLUR - MIN_WINDOW_BLUR);
+  const windowBlurSliderStyle = {
+    "--settings-slider-progress": `${windowBlurRatio * 100}%`,
+    "--settings-slider-fill-offset": `${0.5 - windowBlurRatio}rem`,
   } as CSSProperties;
   const appearanceContrastRatio =
     (settings.appearanceContrast - MIN_APPEARANCE_CONTRAST) /
@@ -315,6 +323,54 @@ export function AppearanceSettingsPanel() {
                   style={windowOpacitySliderStyle}
                   type="range"
                   value={settings.windowOpacity}
+                />
+              </div>
+            }
+          />
+        ) : null}
+
+        {supportsWindowOpacity && settings.windowOpacity < MAX_WINDOW_OPACITY ? (
+          <SettingsRow
+            {...searchableSetting("setting-window-blur")}
+            description={gt("Blur what shows through the window. 0 keeps it sharp.")}
+            resetAction={
+              settings.windowBlur !== DEFAULT_UNIFIED_SETTINGS.windowBlur ? (
+                <SettingResetButton
+                  ariaLabel={gt("Reset window blur to default")}
+                  onClick={() =>
+                    updateSettings({ windowBlur: DEFAULT_UNIFIED_SETTINGS.windowBlur })
+                  }
+                />
+              ) : null
+            }
+            control={
+              <div className="flex w-full items-center gap-3 sm:w-52">
+                <output
+                  className="min-w-12 rounded-md bg-muted px-2 py-1 text-center font-mono text-xs font-medium tabular-nums text-foreground"
+                  htmlFor="window-blur"
+                >
+                  {settings.windowBlur}
+                </output>
+                <input
+                  aria-label={gt("Window blur")}
+                  className="settings-slider min-w-0 flex-1"
+                  id="window-blur"
+                  max={MAX_WINDOW_BLUR}
+                  min={MIN_WINDOW_BLUR}
+                  onChange={(event) => {
+                    const windowBlur = Number(event.currentTarget.value);
+                    if (
+                      Number.isInteger(windowBlur) &&
+                      windowBlur >= MIN_WINDOW_BLUR &&
+                      windowBlur <= MAX_WINDOW_BLUR
+                    ) {
+                      updateSettings({ windowBlur });
+                    }
+                  }}
+                  step={2}
+                  style={windowBlurSliderStyle}
+                  type="range"
+                  value={settings.windowBlur}
                 />
               </div>
             }

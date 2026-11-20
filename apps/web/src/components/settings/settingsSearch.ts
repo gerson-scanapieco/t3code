@@ -372,6 +372,15 @@ export const SETTINGS_SEARCH_ITEMS = [
     macOnly: true,
   },
   {
+    // Prefixed because the slider control already owns the `window-blur` id.
+    id: "setting-window-blur",
+    title: msg("Window blur"),
+    to: "/settings/appearance",
+    searchTerms: [msg("frosted glass radius sharp transparent translucent background desktop")],
+    desktopOnly: true,
+    macOnly: true,
+  },
+  {
     id: "diff-color-scheme",
     title: msg("Diff colors"),
     to: "/settings/diffs",
